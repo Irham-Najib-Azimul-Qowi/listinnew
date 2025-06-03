@@ -1,3 +1,96 @@
+Tentu, berdasarkan struktur `db_listin.sql` yang telah diperbarui dan kebutuhan fitur baru, berikut adalah query SQL yang bisa Anda jalankan untuk memperbarui database Anda yang sudah ada.
+
+**Penting:**
+*   **BACKUP DATABASE ANDA TERLEBIH DAHULU!** Sebelum menjalankan query `ALTER TABLE` atau `CREATE TABLE`, selalu buat cadangan database Anda untuk menghindari kehilangan data jika terjadi kesalahan.
+*   Jalankan query ini melalui phpMyAdmin, command line MySQL, atau tool database lainnya.
+*   Jika Anda sudah memiliki beberapa kolom atau tabel ini dari percobaan sebelumnya, query `ALTER TABLE ADD COLUMN IF NOT EXISTS` (untuk MySQL 8.0.1+) atau `CREATE TABLE IF NOT EXISTS` akan mencegah error. Untuk versi MySQL yang lebih lama, Anda mungkin perlu mengecek manual atau menghapus kolom/tabel tersebut jika sudah ada dengan struktur yang salah.
+
+---
+
+**Query SQL untuk Memperbarui Database `db_listin`:**
+
+```sql
+-- Menggunakan database db_listin
+USE db_listin;
+
+-- 1. Ubah tabel 'users'
+-- Tambah kolom 'google_id' untuk Google OAuth
+ALTER TABLE `users`
+ADD COLUMN `google_id` VARCHAR(255) DEFAULT NULL AFTER `id`,
+ADD UNIQUE INDEX `google_id_unique` (`google_id`);
+
+-- Ubah kolom 'password' agar bisa NULL (untuk pengguna Google yang tidak punya password lokal)
+ALTER TABLE `users`
+MODIFY COLUMN `password` VARCHAR(255) DEFAULT NULL;
+
+-- Tambah kolom 'email_verified_at' (opsional, tapi bagus untuk masa depan)
+ALTER TABLE `users`
+ADD COLUMN `email_verified_at` TIMESTAMP NULL DEFAULT NULL AFTER `created_at`;
+
+-- Set default character set dan collation untuk tabel users jika belum
+ALTER TABLE `users` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- 2. Ubah tabel 'tasks' (jika diperlukan untuk character set)
+-- Set default character set dan collation untuk tabel tasks jika belum
+ALTER TABLE `tasks` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- 3. Buat tabel baru 'password_resets' untuk fitur Lupa Kata Sandi
+CREATE TABLE IF NOT EXISTS `password_resets` (
+  `email` VARCHAR(100) NOT NULL,
+  `token` VARCHAR(255) NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`email`),
+  INDEX `token_idx` (`token`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Pesan bahwa pembaruan selesai (opsional, hanya untuk output di beberapa tool)
+SELECT 'Pembaruan skema database selesai.' AS status;
+```
+
+---
+
+**Penjelasan Query:**
+
+1.  **`USE db_listin;`**: Memastikan query dijalankan pada database yang benar.
+2.  **Perubahan pada tabel `users`**:
+    *   `ALTER TABLE users ADD COLUMN google_id VARCHAR(255) DEFAULT NULL AFTER id;`: Menambahkan kolom `google_id` setelah kolom `id`. Kolom ini akan menyimpan ID unik pengguna dari Google.
+    *   `ALTER TABLE users ADD UNIQUE INDEX google_id_unique (google_id);`: Membuat index unik pada `google_id` untuk memastikan tidak ada duplikasi.
+    *   `ALTER TABLE users MODIFY COLUMN password VARCHAR(255) DEFAULT NULL;`: Mengubah kolom `password` sehingga bisa bernilai `NULL`. Ini penting karena pengguna yang login via Google mungkin tidak memiliki password lokal di aplikasi Anda.
+    *   `ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP NULL DEFAULT NULL AFTER created_at;`: Menambahkan kolom `email_verified_at`. Ini bisa Anda gunakan di masa depan jika ingin mengimplementasikan sistem verifikasi email manual.
+    *   `ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`: Mengubah character set dan collation tabel `users` menjadi `utf8mb4` untuk dukungan karakter yang lebih luas (termasuk emoji).
+
+3.  **Perubahan pada tabel `tasks`**:
+    *   `ALTER TABLE tasks CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`: Sama seperti tabel `users`, ini untuk konsistensi dan dukungan karakter.
+
+4.  **Pembuatan tabel `password_resets`**:
+    *   `CREATE TABLE IF NOT EXISTS password_resets (...)`: Membuat tabel baru bernama `password_resets`. `IF NOT EXISTS` mencegah error jika tabel sudah ada.
+        *   `email VARCHAR(100) NOT NULL`: Menyimpan email pengguna yang meminta reset. Ini adalah `PRIMARY KEY`.
+        *   `token VARCHAR(255) NOT NULL`: Menyimpan token reset yang unik.
+        *   `created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`: Menyimpan waktu kapan token dibuat, untuk validasi kedaluwarsa.
+        *   `INDEX token_idx (token)`: Membuat index pada kolom `token` untuk pencarian yang lebih cepat.
+    *   `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`: Menentukan engine tabel dan character set.
+
+---
+
+**Cara Menjalankan Query:**
+
+*   **phpMyAdmin:**
+    1.  Pilih database `db_listin` Anda dari daftar di sebelah kiri.
+    2.  Klik tab "SQL".
+    3.  Salin dan tempel semua query di atas ke dalam kotak teks.
+    4.  Klik tombol "Go" atau "Kirim".
+*   **MySQL Command Line:**
+    1.  Buka terminal atau command prompt.
+    2.  Login ke MySQL: `mysql -u root -p` (ganti `root` jika username Anda berbeda, lalu masukkan password).
+    3.  Pilih database: `USE db_listin;`
+    4.  Salin dan tempel query satu per satu atau sekaligus.
+    5.  Tekan Enter setelah setiap query atau setelah semua query.
+
+Setelah menjalankan query ini, struktur database Anda akan diperbarui untuk mendukung fitur-fitur baru yang diminta.
+
+
+
+
 Baik, ini adalah pengembangan yang cukup signifikan. Saya akan mencoba memberikan kode selengkap mungkin dan menjelaskan langkah-langkahnya. Mengingat kompleksitasnya, terutama untuk integrasi Google dan Chatbot, Anda mungkin perlu melakukan beberapa penyesuaian dan debugging.
 
 **Struktur Perubahan:**
