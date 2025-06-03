@@ -1,15 +1,13 @@
-Oke, ini adalah permintaan yang sangat besar dan kompleks, melibatkan banyak integrasi dan fitur baru. Saya akan berusaha sebaik mungkin untuk memberikan kerangka kerja dan kode inti yang Anda butuhkan. Namun, penting untuk dipahami bahwa implementasi penuh dan debugging fitur-fitur ini (terutama yang melibatkan layanan eksternal seperti Google OAuth, pengiriman email, dan cron job) akan memerlukan waktu dan upaya yang signifikan dari sisi Anda.
+Baik, ini adalah permintaan yang cukup komprehensif! Saya akan mencoba menyusunnya selengkap mungkin. Ini akan menjadi proyek yang cukup besar.
 
-Saya akan memberikan kode selengkap mungkin. Untuk bagian yang memerlukan konfigurasi eksternal (Google API, SMTP, Cron Job), saya akan berikan panduan di akhir.
-
-**PENTING:**
-1.  **Backup Proyek Anda:** Sebelum melakukan perubahan besar, selalu buat backup dari seluruh proyek dan database Anda.
-2.  **Composer:** Anda akan memerlukan Composer untuk mengelola dependensi PHP seperti Google API Client, PHPMailer, dan TCPDF. Jika belum terinstal, silakan instal terlebih dahulu.
-3.  **Testing Bertahap:** Implementasikan dan uji setiap fitur satu per satu. Jangan coba mengintegrasikan semuanya sekaligus.
+**Penting:**
+1.  **Backup:** Sebelum menerapkan perubahan besar ini, **SELALU BUAT BACKUP** dari seluruh proyek dan database Anda.
+2.  **Composer:** Kita akan menggunakan Composer untuk mengelola pustaka PHP seperti PHPMailer dan Google API Client. Jika Anda belum menginstalnya, silakan instal dari [getcomposer.org](https://getcomposer.org).
+3.  **Email & Google Setup:** Saya akan memberikan kode dengan placeholder atau contoh, tetapi Anda perlu mengkonfigurasi akun Google Cloud Console untuk OAuth 2.0 (Login dengan Google) dan SMTP server untuk pengiriman email (bisa Gmail, SendGrid, dll.). Tutorial untuk ini akan ada di akhir.
 
 ---
 
-**Struktur File yang Akan Ditambahkan/Dimodifikasi:**
+**Struktur File Proyek (Tambahan dan Perubahan):**
 
 ```
 .
@@ -19,6 +17,7 @@ Saya akan memberikan kode selengkap mungkin. Untuk bagian yang memerlukan konfig
 ├── images/
 │   ├── auth-bg.jpg
 │   └── placeholder-profile.png
+│   └── listin-logo.png  (TAMBAHAN - untuk PDF dan email)
 ├── includes/
 │   ├── db.php
 │   ├── footer.php
@@ -26,23 +25,24 @@ Saya akan memberikan kode selengkap mungkin. Untuk bagian yang memerlukan konfig
 │   ├── sidebar.php
 │   └── task_helper.php
 ├── uploads/
-│   └── profile_pictures/ (buat folder ini, pastikan writable)
-├── vendor/ (dibuat oleh Composer)
-├── .htaccess (OPSIONAL, untuk URL cantik jika diinginkan nanti)
-├── ajax_clear_all_notifications.php  (revisi nama file dari permintaan asli)
+│   └── profile_pictures/ (Folder untuk foto profil pengguna)
+├── vendor/  (Dibuat oleh Composer)
+│   └── ... (PHPMailer, Google API Client, dll.)
+├── ajax_clear_all_notifications.php (Harusnya ajax_clear_all_notifications.php)
+├── ajax_get_tasks_for_date.php (BARU - Untuk kalender di laporan)
 ├── ajax_handler.php
 ├── ajax_update_task_status.php
-├── clear_notifications.php (sepertinya duplikat dengan ajax_clear_all_notifications.php, pilih salah satu)
-├── config.php (BARU - untuk konfigurasi Google & Email)
-├── cron_send_reports.php (BARU - untuk cron job laporan email)
+├── clear_notifications.php (Duplikat? Mungkin maksudnya ajax_clear_all_notifications.php)
+├── config/
+│   └── config.php (BARU - Untuk konfigurasi global)
+├── composer.json (BARU - Untuk dependensi PHP)
 ├── dashboard.php
-├── db_listin.sql
+├── db_listin.sql (Struktur DB, akan diupdate)
 ├── edit_profil.php
 ├── edit_tugas.php
 ├── forgot_password.php (BARU)
-├── generate_report_pdf.php (BARU - atau bisa jadi fungsi di dalam laporan.php/cron_send_reports.php)
-├── google_callback.php (BARU)
-├── google_login.php (BARU - skrip untuk redirect ke Google)
+├── generate_pdf_report.php (BARU)
+├── google_login_callback.php (BARU)
 ├── laporan.php (BARU)
 ├── login.php
 ├── logout.php
@@ -52,23 +52,22 @@ Saya akan memberikan kode selengkap mungkin. Untuk bagian yang memerlukan konfig
 ├── register.php
 ├── reset_password.php (BARU)
 ├── riwayat.php
-├── send_email.php (BARU - helper untuk kirim email)
+├── send_deadline_emails.php (BARU - Untuk cron job)
 ├── tambah_tugas.php
-├── ubah_password.php
-└── composer.json (BARU - untuk dependensi PHP)
+└── ubah_password.php
 ```
 
 ---
-**Langkah 1: Persiapan & Instalasi Library**
+**Langkah 1: Persiapan & Konfigurasi Awal**
 
-1.  Buat file `composer.json` di root proyek Anda:
+1.  **Buat `composer.json`** di root proyek:
     ```json
     {
         "name": "yourname/listin-project",
-        "description": "A to-do list application with advanced features.",
+        "description": "Task management application",
         "require": {
             "phpmailer/phpmailer": "^6.8",
-            "google/apiclient": "^2.15",
+            "google/apiclient": "^2.15.0",
             "tecnickcom/tcpdf": "^6.6"
         },
         "authors": [
@@ -79,74 +78,75 @@ Saya akan memberikan kode selengkap mungkin. Untuk bagian yang memerlukan konfig
         ]
     }
     ```
+2.  Jalankan `composer install` di terminal pada direktori root proyek Anda. Ini akan membuat folder `vendor`.
+3.  **Buat folder `config`** dan di dalamnya file `config.php`:
 
-2.  Buka terminal/command prompt di root proyek Anda, lalu jalankan:
-    ```bash
-    composer install
+    ```php
+    <?php
+    // config/config.php
+
+    // URL Aplikasi Anda (PENTING untuk redirect Google & link email)
+    define('APP_URL', 'http://localhost/nama_folder_proyek_anda'); // Ganti sesuai URL Anda
+
+    // Konfigurasi Database
+    define('DB_HOST', '127.0.0.1');
+    define('DB_USER', 'root');
+    define('DB_PASS', '');
+    define('DB_NAME', 'db_listin');
+
+    // Konfigurasi Google OAuth 2.0
+    define('GOOGLE_CLIENT_ID', 'MASUKKAN_CLIENT_ID_ANDA_DISINI');
+    define('GOOGLE_CLIENT_SECRET', 'MASUKKAN_CLIENT_SECRET_ANDA_DISINI');
+    define('GOOGLE_REDIRECT_URI', APP_URL . '/google_login_callback.php');
+
+    // Konfigurasi PHPMailer (Gunakan akun listinproject@gmail.com)
+    define('MAIL_HOST', 'smtp.gmail.com');
+    define('MAIL_USERNAME', 'listinproject@gmail.com');
+    define('MAIL_PASSWORD', 'listin12312'); // Hati-hati! Sebaiknya gunakan App Password jika 2FA aktif
+    define('MAIL_PORT', 587); // Atau 465 untuk SSL
+    define('MAIL_ENCRYPTION', 'tls'); // Atau 'ssl'
+    define('MAIL_FROM_ADDRESS', 'listinproject@gmail.com');
+    define('MAIL_FROM_NAME', 'List In Notifikasi');
+
+    // Path ke logo untuk PDF dan Email
+    define('APP_LOGO_PATH', dirname(__FILE__) . '/../images/listin-logo.png'); // Sesuaikan jika perlu
+
+    // Set timezone
+    date_default_timezone_set('Asia/Jakarta');
+    ?>
     ```
-    Ini akan mengunduh library yang dibutuhkan ke dalam folder `vendor/`.
+    *   *Catatan:* `listinproject@gmail.com` dan `listin12312` adalah contoh. Anda perlu memastikan akun ini bisa mengirim email via SMTP (mungkin perlu "Less Secure App Access" di Gmail atau App Password).
 
-3.  Buat folder `uploads/profile_pictures/`. Pastikan folder ini dapat ditulis oleh server web Anda (misalnya, `chmod 775 uploads/profile_pictures`).
+4.  **Buat `images/listin-logo.png`**: Siapkan file gambar logo untuk aplikasi Anda.
 
 ---
+**Langkah 2: Update Struktur Database (`db_listin.sql`)**
 
-**Langkah 2: Modifikasi Database (`db_listin.sql`)**
-
-Tambahkan kolom dan tabel baru ke `db_listin.sql` Anda, lalu impor ulang atau jalankan query ALTER TABLE di phpMyAdmin/alat database Anda.
+Tambahkan kolom untuk Google ID, token reset password, dan timestamp untuk notifikasi email deadline.
 
 ```sql
--- db_listin.sql (Tambahan & Modifikasi)
+-- db_listin.sql
 
--- Hapus dulu constraint foreign key jika ada, untuk memodifikasi users
--- ALTER TABLE tasks DROP FOREIGN KEY tasks_ibfk_1; (Jika error saat modifikasi users, jalankan ini dulu)
+-- --------------------------------------------------------
+-- Host:                         127.0.0.1
+-- Server version:               5.7.33 - MySQL Community Server (GPL)
+-- Server OS:                    Win64
+-- HeidiSQL Version:             11.2.0.6213
+-- --------------------------------------------------------
 
--- Modifikasi tabel users
-ALTER TABLE `users`
-  ADD COLUMN `google_id` VARCHAR(255) DEFAULT NULL AFTER `profile_image`,
-  ADD COLUMN `is_google_verified` TINYINT(1) DEFAULT 0 AFTER `google_id`,
-  ADD COLUMN `reset_token` VARCHAR(255) DEFAULT NULL AFTER `is_google_verified`,
-  ADD COLUMN `reset_token_expires_at` DATETIME DEFAULT NULL AFTER `reset_token`,
-  ADD COLUMN `report_frequency` ENUM('none','daily','weekly','monthly') NOT NULL DEFAULT 'none' AFTER `reset_token_expires_at`,
-  ADD COLUMN `last_report_sent_at` TIMESTAMP NULL DEFAULT NULL AFTER `report_frequency`,
-  ADD UNIQUE INDEX `google_id_unique` (`google_id`);
-
--- Jika Anda menjalankan ALTER TABLE tasks DROP FOREIGN KEY sebelumnya, tambahkan kembali:
--- ALTER TABLE `tasks` ADD CONSTRAINT `tasks_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 
--- Tidak perlu tabel password_resets terpisah jika token disimpan di users table
--- Tabel report_schedules juga tidak perlu jika info disimpan di users table
+-- Dumping database structure for db_listin
+CREATE DATABASE IF NOT EXISTS `db_listin` /*!40100 DEFAULT CHARACTER SET latin1 */;
+USE `db_listin`;
 
--- Pastikan kolom last_overdue_notif_sent dan last_deadline_email_sent ada di tasks
-ALTER TABLE `tasks`
-  ADD COLUMN `last_deadline_email_sent` TIMESTAMP NULL DEFAULT NULL AFTER `last_overdue_notif_sent`;
-
--- (Struktur tabel tasks dan users lainnya tetap sama dari file asli Anda)
--- Pastikan untuk menjalankan kembali CREATE TABLE jika Anda membuat database baru.
--- Jika memodifikasi yang sudah ada, cukup ALTER TABLE di atas.
-
--- Contoh struktur lengkap jika membuat ulang (gabungkan dengan SQL Anda):
-DROP TABLE IF EXISTS `tasks`;
-DROP TABLE IF EXISTS `users`;
-
-CREATE TABLE IF NOT EXISTS `users` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `username` varchar(100) NOT NULL,
-  `email` varchar(100) NOT NULL,
-  `password` varchar(255) DEFAULT NULL, /* Bisa NULL jika login via Google */
-  `profile_image` varchar(255) DEFAULT 'images/placeholder-profile.png',
-  `google_id` VARCHAR(255) DEFAULT NULL,
-  `is_google_verified` TINYINT(1) DEFAULT 0,
-  `reset_token` VARCHAR(255) DEFAULT NULL,
-  `reset_token_expires_at` DATETIME DEFAULT NULL,
-  `report_frequency` ENUM('none','daily','weekly','monthly') NOT NULL DEFAULT 'none',
-  `last_report_sent_at` TIMESTAMP NULL DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `email` (`email`),
-  UNIQUE KEY `google_id_unique` (`google_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
+-- Dumping structure for table db_listin.tasks
 CREATE TABLE IF NOT EXISTS `tasks` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
@@ -158,7 +158,8 @@ CREATE TABLE IF NOT EXISTS `tasks` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `last_overdue_notif_sent` timestamp NULL DEFAULT NULL,
-  `last_deadline_email_sent` timestamp NULL DEFAULT NULL,
+  `last_deadline_email_sent` timestamp NULL DEFAULT NULL COMMENT 'Untuk notif H-1 via email',
+  `last_overdue_email_sent` timestamp NULL DEFAULT NULL COMMENT 'Untuk notif overdue via email',
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   KEY `status` (`status`),
@@ -166,159 +167,70 @@ CREATE TABLE IF NOT EXISTS `tasks` (
   CONSTRAINT `tasks_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Dumping structure for table db_listin.users
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `google_id` varchar(255) DEFAULT NULL,
+  `username` varchar(100) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `password` varchar(255) DEFAULT NULL COMMENT 'Bisa NULL jika login via Google & belum set password manual',
+  `profile_image` varchar(255) DEFAULT 'images/placeholder-profile.png',
+  `reset_token` varchar(255) DEFAULT NULL,
+  `reset_token_expiry` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email` (`email`),
+  UNIQUE KEY `google_id` (`google_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
+/*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
 ```
 
----
-**Langkah 3: File Konfigurasi Baru (`config.php`)**
+Jalankan SQL ini di phpMyAdmin atau tool database Anda untuk memperbarui struktur tabel.
 
-Buat file `includes/config.php`:
+---
+**Langkah 3: Modifikasi File PHP yang Ada & Penambahan File Baru**
+
+Ini bagian terpanjang. Saya akan berikan kode lengkap untuk setiap file.
+
+**`includes/db.php`**
 ```php
 <?php
-// includes/config.php
+// includes/db.php
+require_once dirname(__FILE__) . '/../config/config.php'; // Muat konfigurasi
 
-// Google API Configuration
-define('GOOGLE_CLIENT_ID', 'MASUKKAN_CLIENT_ID_ANDA_DISINI'); // Ganti dengan Client ID Anda
-define('GOOGLE_CLIENT_SECRET', 'MASUKKAN_CLIENT_SECRET_ANDA_DISINI'); // Ganti dengan Client Secret Anda
-define('GOOGLE_REDIRECT_URI', 'http://localhost/nama_folder_proyek_anda/google_callback.php'); // Sesuaikan URL
+// Buat Koneksi
+$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
-// Email Configuration (PHPMailer)
-define('SMTP_HOST', 'smtp.gmail.com'); // Atau SMTP host lain
-define('SMTP_USERNAME', 'listinproject@gmail.com'); // Email pengirim
-define('SMTP_PASSWORD', 'listin12312'); // Password email (atau App Password jika pakai Gmail 2FA)
-define('SMTP_PORT', 587); // Umumnya 587 untuk TLS, 465 untuk SSL
-define('SMTP_SECURE', 'tls'); // 'tls' atau 'ssl'
-define('EMAIL_FROM_ADDRESS', 'listinproject@gmail.com');
-define('EMAIL_FROM_NAME', 'List In Application');
+// Cek Koneksi
+if ($conn->connect_error) {
+    // Jangan tampilkan error detail di produksi
+    error_log("Koneksi Gagal: " . $conn->connect_error);
+    die("Terjadi masalah koneksi ke database. Silakan coba lagi nanti.");
+}
 
-// Site URL (untuk link di email, dll)
-define('BASE_URL', 'http://localhost/nama_folder_proyek_anda'); // Sesuaikan
-
-// Pastikan session dimulai jika belum
+// Mulai session di sini agar tersedia di semua file yang meng-include db.php
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
-
-// Autoload Composer dependencies
-require_once __DIR__ . '/../vendor/autoload.php';
 ?>
 ```
-**PENTING:** Ganti `MASUKKAN_CLIENT_ID_ANDA_DISINI`, `MASUKKAN_CLIENT_SECRET_ANDA_DISINI`, `http://localhost/nama_folder_proyek_anda/` dengan nilai yang benar.
 
----
-**Langkah 4: Helper Pengiriman Email Baru (`send_email.php`)**
-
-Buat file `includes/send_email.php`:
+**`includes/header.php`** (Modifikasi signifikan untuk notifikasi email & Google Client)
 ```php
 <?php
-// includes/send_email.php
-require_once __DIR__ . '/config.php'; // Untuk konstanta SMTP dan autoload PHPMailer
+require_once 'db.php';
+require_once dirname(__FILE__) . '/../vendor/autoload.php'; // Untuk Google API Client & PHPMailer
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-function send_email($to, $subject, $htmlBody, $altBody = '', $attachments = []) {
-    $mail = new PHPMailer(true);
-    try {
-        // Server settings
-        // $mail->SMTPDebug = SMTP::DEBUG_SERVER; // Enable verbose debug output untuk development
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USERNAME;
-        $mail->Password   = SMTP_PASSWORD;
-        $mail->SMTPSecure = SMTP_SECURE; // PHPMailer::ENCRYPTION_SMTPS jika pakai SMTPSecure const
-        $mail->Port       = SMTP_PORT;
-        $mail->CharSet    = 'UTF-8';
-
-        // Recipients
-        $mail->setFrom(EMAIL_FROM_ADDRESS, EMAIL_FROM_NAME);
-        $mail->addAddress($to);
-
-        // Attachments
-        foreach ($attachments as $attachment) {
-            if (isset($attachment['path']) && isset($attachment['name'])) {
-                $mail->addAttachment($attachment['path'], $attachment['name']);
-            }
-        }
-
-        // Content
-        $mail->isHTML(true);
-        $mail->Subject = $subject;
-        $mail->Body    = $htmlBody;
-        $mail->AltBody = $altBody ?: strip_tags($htmlBody);
-
-        $mail->send();
-        return true;
-    } catch (Exception $e) {
-        error_log("Message could not be sent. Mailer Error: {$mail->ErrorInfo}"); // Log error
-        // add_notification("Gagal mengirim email: {$mail->ErrorInfo}", "error"); // Mungkin tidak cocok di sini, karena ini helper
-        return false;
-    }
-}
-
-function get_email_template_header() {
-    return "<!DOCTYPE html>
-    <html lang='id'>
-    <head>
-        <meta charset='UTF-8'>
-        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 0; }
-            .container { max-width: 600px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-            .header { background-color: #7e47b8; color: white; padding: 15px; text-align: center; border-top-left-radius: 8px; border-top-right-radius: 8px; }
-            .header h1 { margin: 0; font-size: 24px; }
-            .content { padding: 20px; }
-            .content h2 { color: #7e47b8; }
-            .content p { margin-bottom: 15px; }
-            .task-list { list-style: none; padding: 0; }
-            .task-list li { background-color: #f9f9f9; border: 1px solid #eee; padding: 10px; margin-bottom: 8px; border-radius: 4px; }
-            .task-list li strong { color: #555; }
-            .button { display: inline-block; background-color: #7e47b8; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin-top: 15px; }
-            .footer { text-align: center; margin-top: 20px; padding: 15px; font-size: 0.9em; color: #777; border-top: 1px solid #eee; }
-        </style>
-    </head>
-    <body>
-        <div class='container'>
-            <div class='header'><h1>List In</h1></div>";
-}
-
-function get_email_template_footer() {
-    return "<div class='footer'>
-                <p>&copy; " . date('Y') . " List In. Semua hak cipta dilindungi.</p>
-                <p>Ini adalah email otomatis, mohon untuk tidak membalas.</p>
-            </div>
-        </div>
-    </body>
-    </html>";
-}
-
-?>
-```
-
----
-**Langkah 5: Modifikasi File yang Ada**
-
-**5.1. `includes/db.php`**
-Ganti `session_start();` dengan kode yang ada di `config.php` (karena `config.php` sudah memulainya). Cukup pastikan `require_once __DIR__ . '/config.php';` ada di awal file yang butuh koneksi DB dan session.
-Isi `db.php` Anda sudah baik.
-
-**5.2. `includes/header.php`**
-Ini akan jadi sangat panjang.
-*   Tambahkan `require_once __DIR__ . '/config.php';` dan `require_once __DIR__ . '/send_email.php';` di paling atas.
-*   Modifikasi fungsi `add_notification`.
-*   Modifikasi logika cek deadline & overdue untuk mengirim email.
-
-```php
-<?php
-// includes/header.php
-require_once __DIR__ . '/config.php'; // Mengandung session_start() dan autoload
-require_once __DIR__ . '/db.php';     // Untuk koneksi DB $conn
-require_once __DIR__ . '/send_email.php'; // Untuk fungsi send_email()
-
 $current_page = basename($_SERVER['SCRIPT_NAME']);
 $current_user_id = $_SESSION['user_id'] ?? null;
-$current_user_email = ''; // Untuk pengiriman email
-$current_user_profile_image = BASE_URL . '/images/placeholder-profile.png'; // Gunakan BASE_URL
+$current_user_profile_image = 'images/placeholder-profile.png'; // Default
 
 if ($current_user_id && isset($conn)) {
     $stmt_user_header = $conn->prepare("SELECT username, email, profile_image FROM users WHERE id = ?");
@@ -327,41 +239,27 @@ if ($current_user_id && isset($conn)) {
         $stmt_user_header->execute();
         $result_user_header = $stmt_user_header->get_result();
         if ($user_data_header = $result_user_header->fetch_assoc()) {
-            $current_user_profile_image = !empty($user_data_header['profile_image']) && file_exists(__DIR__ . '/../' . $user_data_header['profile_image'])
-                ? BASE_URL . '/' . $user_data_header['profile_image']
-                : BASE_URL . '/images/placeholder-profile.png';
-            $_SESSION['username'] = $user_data_header['username']; // Update session username
-            $current_user_email = $user_data_header['email'];
+            $current_user_profile_image = (!empty($user_data_header['profile_image']) && (filter_var($user_data_header['profile_image'], FILTER_VALIDATE_URL) || file_exists($user_data_header['profile_image'])))
+                                          ? $user_data_header['profile_image']
+                                          : 'images/placeholder-profile.png';
+            $_SESSION['username'] = $user_data_header['username']; // Pastikan username di session update
+            $_SESSION['email'] = $user_data_header['email']; // Simpan email user di session
         }
         $stmt_user_header->close();
     }
 }
 
-function add_notification($message, $type = 'info', $send_email_flag = false, $email_details = []) {
+
+function add_notification($message, $type = 'info') {
     if (!isset($_SESSION['notification_messages'])) {
         $_SESSION['notification_messages'] = [];
     }
     $new_notification = ['message' => $message, 'type' => $type, 'time' => time()];
-
+    
     $is_duplicate_notif = false;
+    // ... (logika duplikasi notifikasi session bisa tetap atau disederhanakan)
     if ($type === 'deadline_soon' || $type === 'overdue_task') {
-        // ... (logika duplikasi notifikasi Anda sudah baik) ...
-        $message_core_part = '';
-        if (preg_match('/Tugas(?:-tugas)?\s*(".*?")\s*(akan jatuh tempo besok|telah melewati batas waktu)/', $new_notification['message'], $matches)) {
-            $message_core_part = $matches[1];
-        } elseif (preg_match('/(".*?")/', $new_notification['message'], $matches_generic)) {
-            $message_core_part = $matches_generic[1];
-        }
-
-        foreach ($_SESSION['notification_messages'] as $existing_notif) {
-            if (isset($existing_notif['message']) &&
-                ($message_core_part && strpos($existing_notif['message'], $message_core_part) !== false) &&
-                $existing_notif['type'] === $type &&
-                (time() - ($existing_notif['time'] ?? 0)) < 3600 * 3) {
-                $is_duplicate_notif = true;
-                break;
-            }
-        }
+        // (logika cek duplikat bisa disesuaikan atau dihapus jika email lebih utama)
     }
 
     if (!$is_duplicate_notif) {
@@ -370,207 +268,107 @@ function add_notification($message, $type = 'info', $send_email_flag = false, $e
             array_shift($_SESSION['notification_messages']);
         }
         $_SESSION['has_unread_notifications_badge'] = true;
-
-        // Kirim email jika flag true dan ada detail email
-        if ($send_email_flag && !empty($email_details) && !empty($email_details['to'])) {
-            send_email($email_details['to'], $email_details['subject'], $email_details['body']);
-        }
     }
 }
 
-// Cek Tugas Deadline H-1
-if ($current_user_id && $current_user_email && isset($conn) && !in_array($current_page, ['login.php', 'register.php'])) {
+// --- Notifikasi Session untuk Deadline H-1 dan Terlewat ---
+// Notifikasi ini bersifat UI/session, pengiriman email dilakukan oleh script cron terpisah.
+// Cek Tugas Deadline H-1 (Notifikasi Session)
+if ($current_user_id && isset($conn) && !in_array($current_page, ['login.php', 'register.php'])) {
     $tomorrow_date = date('Y-m-d', strtotime('+1 day'));
     $today_for_notif_check_h1 = date('Y-m-d');
-    // Gunakan kolom last_deadline_email_sent untuk email, session untuk notif web
-    $notif_key_deadline_h1_web = 'deadline_h1_notif_sent_web_' . $today_for_notif_check_h1 . '_uid' . $current_user_id;
+    $notif_key_deadline_h1_session = 'deadline_h1_session_notif_sent_' . $today_for_notif_check_h1 . '_uid' . $current_user_id;
 
-    // Cek untuk notifikasi web (via session)
-    if (!isset($_SESSION[$notif_key_deadline_h1_web])) {
-        $stmt_deadline_check_h1_web = $conn->prepare("SELECT title FROM tasks WHERE user_id = ? AND due_date = ? AND status != 'Completed'");
-        // ... (logika notifikasi web Anda yang sudah ada untuk H-1) ...
-        if ($stmt_deadline_check_h1_web) {
-            $stmt_deadline_check_h1_web->bind_param("is", $current_user_id, $tomorrow_date);
-            $stmt_deadline_check_h1_web->execute();
-            $result_deadline_tasks_h1_web = $stmt_deadline_check_h1_web->get_result();
-            $tasks_deadline_tomorrow_web = [];
-            while ($task_for_deadline_notif_h1_web = $result_deadline_tasks_h1_web->fetch_assoc()) {
-                $tasks_deadline_tomorrow_web[] = htmlspecialchars($task_for_deadline_notif_h1_web['title']);
+    if (!isset($_SESSION[$notif_key_deadline_h1_session])) {
+        $stmt_deadline_check_h1_sess = $conn->prepare("SELECT title FROM tasks WHERE user_id = ? AND due_date = ? AND status != 'Completed'");
+        if ($stmt_deadline_check_h1_sess) {
+            $stmt_deadline_check_h1_sess->bind_param("is", $current_user_id, $tomorrow_date);
+            $stmt_deadline_check_h1_sess->execute();
+            $result_deadline_tasks_h1_sess = $stmt_deadline_check_h1_sess->get_result();
+            $tasks_deadline_tomorrow_sess = [];
+            while ($task_for_deadline_notif_h1_sess = $result_deadline_tasks_h1_sess->fetch_assoc()) {
+                $tasks_deadline_tomorrow_sess[] = htmlspecialchars($task_for_deadline_notif_h1_sess['title']);
             }
-            $stmt_deadline_check_h1_web->close();
+            $stmt_deadline_check_h1_sess->close();
 
-            if (!empty($tasks_deadline_tomorrow_web)) {
-                $task_list_str_h1_web = implode(", ", array_map(function($title) { return "\"".$title."\""; }, $tasks_deadline_tomorrow_web));
-                $message_plural_h1_web = count($tasks_deadline_tomorrow_web) > 1 ? "Tugas-tugas" : "Tugas";
-                $deadline_message_h1_web = "<span class='message-content'><strong>PERHATIAN:</strong> $message_plural_h1_web $task_list_str_h1_web akan jatuh tempo besok!</span>";
-                add_notification($deadline_message_h1_web, "deadline_soon"); // Hanya notif web
-                $_SESSION[$notif_key_deadline_h1_web] = true;
-            }
-        }
-    }
-
-    // Cek untuk pengiriman email H-1 (gunakan kolom last_deadline_email_sent)
-    $stmt_deadline_email = $conn->prepare(
-        "SELECT id, title, description, DATE_FORMAT(due_date, '%W, %e %M %Y') as due_date_formatted_email
-         FROM tasks WHERE user_id = ? AND due_date = ? AND status != 'Completed'
-         AND (last_deadline_email_sent IS NULL OR DATE(last_deadline_email_sent) < CURDATE())"
-    );
-    if ($stmt_deadline_email) {
-        $stmt_deadline_email->bind_param("is", $current_user_id, $tomorrow_date);
-        $stmt_deadline_email->execute();
-        $result_deadline_tasks_email = $stmt_deadline_email->get_result();
-        $tasks_for_email_h1 = [];
-        $task_ids_to_update_deadline_email = [];
-        while ($task_email = $result_deadline_tasks_email->fetch_assoc()) {
-            $tasks_for_email_h1[] = $task_email;
-            $task_ids_to_update_deadline_email[] = $task_email['id'];
-        }
-        $stmt_deadline_email->close();
-
-        if (!empty($tasks_for_email_h1)) {
-            $email_subject_h1 = "Pengingat: Tugas Akan Jatuh Tempo Besok di List In";
-            $email_body_h1 = get_email_template_header();
-            $email_body_h1 .= "<div class='content'>
-                                <h2>Halo " . htmlspecialchars($_SESSION['username']) . ",</h2>
-                                <p>Ini adalah pengingat bahwa tugas-tugas berikut akan jatuh tempo besok, <strong>" . date('d M Y', strtotime($tomorrow_date)) . "</strong>. Mohon segera selesaikan atau perbarui statusnya di aplikasi List In.</p>
-                                <ul class='task-list'>";
-            foreach ($tasks_for_email_h1 as $task_item_email) {
-                $email_body_h1 .= "<li><strong>" . htmlspecialchars($task_item_email['title']) . "</strong><br>" .
-                                  "<small>Deskripsi: " . (empty($task_item_email['description']) ? '<em>Tidak ada</em>' : nl2br(htmlspecialchars($task_item_email['description']))) . "</small></li>";
-            }
-            $email_body_h1 .= "</ul>
-                               <p>Anda dapat mengelola tugas-tugas Anda dengan mengunjungi tautan berikut:</p>
-                               <a href='" . BASE_URL . "/manajemen_tugas.php' class='button'>Kelola Tugas Saya</a>
-                               <p>Terima kasih telah menggunakan List In untuk membantu produktivitas Anda!</p>
-                               <p>Salam,<br>Tim List In</p>
-                               </div>";
-            $email_body_h1 .= get_email_template_footer();
-
-            if (send_email($current_user_email, $email_subject_h1, $email_body_h1)) {
-                if (!empty($task_ids_to_update_deadline_email)) {
-                    $ids_placeholder_h1 = implode(',', array_fill(0, count($task_ids_to_update_deadline_email), '?'));
-                    $stmt_update_deadline_sent = $conn->prepare(
-                        "UPDATE tasks SET last_deadline_email_sent = NOW() WHERE id IN ($ids_placeholder_h1) AND user_id = ?"
-                    );
-                    if ($stmt_update_deadline_sent) {
-                        $types_update_h1 = str_repeat('i', count($task_ids_to_update_deadline_email)) . 'i';
-                        $params_update_h1 = array_merge($task_ids_to_update_deadline_email, [$current_user_id]);
-                        $stmt_update_deadline_sent->bind_param($types_update_h1, ...$params_update_h1);
-                        $stmt_update_deadline_sent->execute();
-                        $stmt_update_deadline_sent->close();
-                    }
-                }
+            if (!empty($tasks_deadline_tomorrow_sess)) {
+                $task_list_str_h1_sess = implode(", ", array_map(function($title) { return "\"".$title."\""; }, $tasks_deadline_tomorrow_sess));
+                $message_plural_h1_sess = count($tasks_deadline_tomorrow_sess) > 1 ? "Tugas-tugas" : "Tugas";
+                $deadline_message_h1_sess = "<span class='message-content'><strong>PERHATIAN (UI):</strong> $message_plural_h1_sess $task_list_str_h1_sess akan jatuh tempo besok!</span>";
+                add_notification($deadline_message_h1_sess, "deadline_soon");
+                $_SESSION[$notif_key_deadline_h1_session] = true;
             }
         }
     }
 }
 
+// Cek Tugas Terlewat DL (Notifikasi Session)
+if ($current_user_id && isset($conn) && !in_array($current_page, ['login.php', 'register.php'])) {
+    $today_for_overdue_check_sess = date('Y-m-d');
+    $notif_key_overdue_session = 'overdue_session_notif_sent_' . $today_for_overdue_check_sess . '_uid' . $current_user_id;
 
-// Cek Tugas Terlewat DL (Overdue)
-if ($current_user_id && $current_user_email && isset($conn) && !in_array($current_page, ['login.php', 'register.php'])) {
-    $today_for_overdue_check = date('Y-m-d');
-    // Gunakan kolom last_overdue_notif_sent untuk email, session untuk notif web
-    $notif_key_overdue_web = 'overdue_notif_sent_web_' . $today_for_overdue_check . '_uid' . $current_user_id;
-
-    // Cek untuk notifikasi web (via session)
-    if (!isset($_SESSION[$notif_key_overdue_web])) {
-        $stmt_overdue_check_web = $conn->prepare(
+    if (!isset($_SESSION[$notif_key_overdue_session])) {
+        $stmt_overdue_check_sess = $conn->prepare(
             "SELECT id, title FROM tasks
-             WHERE user_id = ? AND due_date < CURDATE() AND status != 'Completed'"
-             // Tidak perlu cek last_overdue_notif_sent untuk notif web, cukup session flag
+             WHERE user_id = ? AND due_date < CURDATE() AND status != 'Completed'
+             AND (last_overdue_notif_sent IS NULL OR DATE(last_overdue_notif_sent) < CURDATE())" // Cek flag notif session
         );
-        // ... (logika notifikasi web Anda yang sudah ada untuk overdue) ...
-        if ($stmt_overdue_check_web) {
-            $stmt_overdue_check_web->bind_param("i", $current_user_id);
-            $stmt_overdue_check_web->execute();
-            $result_overdue_tasks_web = $stmt_overdue_check_web->get_result();
-            $tasks_overdue_web = [];
-            while ($task_overdue_web_item = $result_overdue_tasks_web->fetch_assoc()) {
-                $tasks_overdue_web[] = htmlspecialchars($task_overdue_web_item['title']);
+        if ($stmt_overdue_check_sess) {
+            $stmt_overdue_check_sess->bind_param("i", $current_user_id);
+            $stmt_overdue_check_sess->execute();
+            $result_overdue_tasks_sess = $stmt_overdue_check_sess->get_result();
+            $tasks_overdue_sess = [];
+            while ($task_overdue_s = $result_overdue_tasks_sess->fetch_assoc()) {
+                $tasks_overdue_sess[] = htmlspecialchars($task_overdue_s['title']);
             }
-            $stmt_overdue_check_web->close();
+            $stmt_overdue_check_sess->close();
 
-            if (!empty($tasks_overdue_web)) {
-                $task_list_str_overdue_web = implode(", ", array_map(function($title) { return "\"".$title."\""; }, $tasks_overdue_web));
-                $message_plural_overdue_web = count($tasks_overdue_web) > 1 ? "Tugas-tugas" : "Tugas";
-                $overdue_message_web = "<span class='message-content'><strong>TERLEWAT:</strong> $message_plural_overdue_web $task_list_str_overdue_web telah melewati batas waktu!</span>";
-                add_notification($overdue_message_web, "deadline_soon"); // Tipe bisa 'overdue_task'
-                $_SESSION[$notif_key_overdue_web] = true;
-            }
-        }
-    }
-
-    // Cek untuk pengiriman email Overdue (gunakan kolom last_overdue_notif_sent)
-    $stmt_overdue_email = $conn->prepare(
-        "SELECT id, title, description, DATE_FORMAT(due_date, '%W, %e %M %Y') as due_date_formatted_email
-         FROM tasks WHERE user_id = ? AND due_date < CURDATE() AND status != 'Completed'
-         AND (last_overdue_notif_sent IS NULL OR DATE(last_overdue_notif_sent) < CURDATE())"
-    );
-    if ($stmt_overdue_email) {
-        $stmt_overdue_email->bind_param("i", $current_user_id);
-        $stmt_overdue_email->execute();
-        $result_overdue_tasks_email = $stmt_overdue_email->get_result();
-        $tasks_for_email_overdue = [];
-        $task_ids_to_update_overdue_email = [];
-        while ($task_email_ov = $result_overdue_tasks_email->fetch_assoc()) {
-            $tasks_for_email_overdue[] = $task_email_ov;
-            $task_ids_to_update_overdue_email[] = $task_email_ov['id'];
-        }
-        $stmt_overdue_email->close();
-
-        if (!empty($tasks_for_email_overdue)) {
-            $email_subject_overdue = "Pemberitahuan: Tugas Terlewat Batas Waktu di List In";
-            $email_body_overdue = get_email_template_header();
-            $email_body_overdue .= "<div class='content'>
-                                <h2>Halo " . htmlspecialchars($_SESSION['username']) . ",</h2>
-                                <p>Kami ingin memberitahukan bahwa tugas-tugas berikut telah melewati batas waktu pengerjaan dan statusnya belum 'Selesai'.</p>
-                                <ul class='task-list'>";
-            foreach ($tasks_for_email_overdue as $task_item_email_ov) {
-                $email_body_overdue .= "<li><strong>" . htmlspecialchars($task_item_email_ov['title']) . "</strong> (Batas Waktu: " . htmlspecialchars($task_item_email_ov['due_date_formatted_email']) . ")<br>" .
-                                  "<small>Deskripsi: " . (empty($task_item_email_ov['description']) ? '<em>Tidak ada</em>' : nl2br(htmlspecialchars($task_item_email_ov['description']))) . "</small></li>";
-            }
-            $email_body_overdue .= "</ul>
-                               <p>Mohon segera periksa dan perbarui status tugas-tugas tersebut di aplikasi List In. Keterlambatan dapat mempengaruhi progres Anda.</p>
-                               <a href='" . BASE_URL . "/manajemen_tugas.php' class='button'>Kelola Tugas Saya</a>
-                               <p>Terima kasih atas perhatiannya.</p>
-                               <p>Salam,<br>Tim List In</p>
-                               </div>";
-            $email_body_overdue .= get_email_template_footer();
-
-            if (send_email($current_user_email, $email_subject_overdue, $email_body_overdue)) {
-                if (!empty($task_ids_to_update_overdue_email)) {
-                    $ids_placeholder_ov = implode(',', array_fill(0, count($task_ids_to_update_overdue_email), '?'));
-                    $stmt_update_overdue_sent = $conn->prepare(
-                        "UPDATE tasks SET last_overdue_notif_sent = NOW() WHERE id IN ($ids_placeholder_ov) AND user_id = ?"
-                    );
-                    if ($stmt_update_overdue_sent) {
-                        $types_update_ov = str_repeat('i', count($task_ids_to_update_overdue_email)) . 'i';
-                        $params_update_ov = array_merge($task_ids_to_update_overdue_email, [$current_user_id]);
-                        $stmt_update_overdue_sent->bind_param($types_update_ov, ...$params_update_ov);
-                        $stmt_update_overdue_sent->execute();
-                        $stmt_update_overdue_sent->close();
-                    }
-                }
+            if (!empty($tasks_overdue_sess)) {
+                $task_list_str_overdue_sess = implode(", ", array_map(function($title) { return "\"".$title."\""; }, $tasks_overdue_sess));
+                $message_plural_overdue_sess = count($tasks_overdue_sess) > 1 ? "Tugas-tugas" : "Tugas";
+                $overdue_message_sess = "<span class='message-content'><strong>TERLEWAT (UI):</strong> $message_plural_overdue_sess $task_list_str_overdue_sess telah melewati batas waktu!</span>";
+                add_notification($overdue_message_sess, "deadline_soon"); // Tipe "deadline_soon" untuk styling merah
+                // Update flag session setelah notifikasi UI ditampilkan
+                // Tidak perlu update kolom last_overdue_notif_sent di sini, itu untuk notifikasi email via cron
+                $_SESSION[$notif_key_overdue_session] = true;
             }
         }
     }
 }
+// --- Akhir Notifikasi Session ---
 
 
 $has_unread_badge_for_icon = $_SESSION['has_unread_notifications_badge'] ?? false;
 
-// ... (sisa kode header.php Anda, seperti format_tanggal_indonesia_header, HTML head, body, header utama)
-// Pastikan path CSS dan JS menggunakan BASE_URL jika perlu, atau relatif jika struktur folder tetap.
-// Contoh untuk CSS: <link rel="stylesheet" href="<?php echo BASE_URL; ?>/css/style.css?v=<?php echo time(); ?>">
-// Namun, jika header.php ada di includes/, maka path relatif seperti ../css/style.css atau css/style.css (jika BASE_URL diatur dengan benar di HTML base tag atau server) mungkin sudah cukup.
-// Untuk script FOUC prevent di <head>, itu sudah baik.
+function format_tanggal_indonesia_header($date_str) {
+    if (empty($date_str) || $date_str == '0000-00-00') return 'N/A';
+    try { $date = new DateTime($date_str); } catch (Exception $e) { return 'Invalid Date'; }
+    $hari_arr = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    $bulan_arr = [1=>'Jan',2=>'Feb',3=>'Mar',4=>'Apr',5=>'Mei',6=>'Jun',7=>'Jul',8=>'Agu',9=>'Sep',10=>'Okt',11=>'Nov',12=>'Des'];
+    $hari = $hari_arr[(int)$date->format('w')];
+    $tanggal = $date->format('j');
+    $bulan = $bulan_arr[(int)$date->format('n')];
+    return $hari . ', ' . $tanggal . ' ' . $bulan;
+}
+$today_display_full = format_tanggal_indonesia_header(date('Y-m-d'));
+$parts_today_display = explode(', ', $today_display_full);
+$day_name_display = $parts_today_display[0] ?? '';
+$date_str_display = $parts_today_display[1] ?? '';
+
+// Google Client Initialization
+$google_client = new Google_Client();
+$google_client->setClientId(GOOGLE_CLIENT_ID);
+$google_client->setClientSecret(GOOGLE_CLIENT_SECRET);
+$google_client->setRedirectUri(GOOGLE_REDIRECT_URI);
+$google_client->addScope("email");
+$google_client->addScope("profile");
+
 ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <base href="<?php echo BASE_URL . '/'; ?>"> <!-- Penting untuk path relatif -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
@@ -589,9 +387,9 @@ $has_unread_badge_for_icon = $_SESSION['has_unread_notifications_badge'] ?? fals
     <?php if (in_array($current_page, ['login.php', 'register.php', 'forgot_password.php', 'reset_password.php'])): ?>
         <link rel="stylesheet" href="css/auth.css?v=<?php echo time(); ?>">
     <?php endif; ?>
-    <title><?php echo isset($page_title) ? htmlspecialchars($page_title) . ' - List In' : 'List In'; ?></title>
+    <title><?php echo isset($page_title) ? htmlspecialchars($page_title) . ' - ' : ''; ?>List In</title>
 </head>
-<body class="<?php echo in_array($current_page, ['login.php', 'register.php', 'forgot_password.php', 'reset_password.php']) ? 'auth-page' : ''; ?> <?php if (isset($_SESSION['sidebar_hidden']) && $_SESSION['sidebar_hidden'] === 'true' && !in_array($current_page, ['login.php', 'register.php'])) echo 'sidebar-hidden'; ?>">
+<body class="<?php echo in_array($current_page, ['login.php', 'register.php', 'forgot_password.php', 'reset_password.php']) ? 'auth-page' : ''; ?>">
     <?php if (in_array($current_page, ['login.php', 'register.php', 'forgot_password.php', 'reset_password.php'])): ?>
         <script> document.documentElement.classList.add('auth-html'); </script>
     <?php endif; ?>
@@ -620,39 +418,53 @@ $has_unread_badge_for_icon = $_SESSION['has_unread_notifications_badge'] ?? fals
              <i class="fas fa-bell <?php if ($has_unread_badge_for_icon) echo 'has-notif'; ?>" id="bellIcon" title="Notifikasi"></i>
             <i class="fas fa-calendar-alt" id="calendarIcon" title="Kalender"></i>
             <div class="date-container">
-                <p><?php echo htmlspecialchars(format_tanggal_indonesia_header(date('Y-m-d'))[0] ?? ''); ?></p>
-                <span><?php echo htmlspecialchars(format_tanggal_indonesia_header(date('Y-m-d'))[1] ?? ''); ?></span>
+                <p><?php echo htmlspecialchars($day_name_display); ?></p>
+                <span><?php echo htmlspecialchars($date_str_display); ?></span>
             </div>
         </div>
     </header>
     <div class="content">
     <?php endif; ?>
 ```
-*Catatan: Fungsi `format_tanggal_indonesia_header` Anda mengembalikan array. Saya sesuaikan cara pemanggilannya.*
 
-**5.3. `includes/footer.php`**
-*   Pastikan `$current_page` terdefinisi jika footer dipanggil dari halaman auth.
-*   Logika sidebar toggle sudah ada, pastikan `sidebar_hidden` di-set di session atau localStorage.
-
+**`includes/sidebar.php`** (Tambah link Laporan)
 ```php
 <?php
-// includes/footer.php
-$current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan terdefinisi
+// $current_page sudah didefinisikan di header.php
 ?>
 <?php if (!in_array($current_page, ['login.php', 'register.php', 'forgot_password.php', 'reset_password.php'])): ?>
-    </div> <!-- penutup div.content -->
+        <aside class="sidebar" id="sidebar">
+            <nav class="menu">
+                <a href="dashboard.php" class="<?php echo ($current_page == 'dashboard.php') ? 'active' : ''; ?>"><i class="fas fa-home"></i> <span>Dasbor</span></a>
+                <a href="manajemen_tugas.php" class="<?php echo ($current_page == 'manajemen_tugas.php' || $current_page == 'edit_tugas.php') ? 'active' : ''; ?>"><i class="fas fa-tasks"></i> <span>Kelola Tugas</span></a>
+                <a href="tambah_tugas.php" class="<?php echo ($current_page == 'tambah_tugas.php') ? 'active' : ''; ?>"><i class="fas fa-plus-circle"></i> <span>Tambah Tugas</span></a>
+                <a href="riwayat.php" class="<?php echo ($current_page == 'riwayat.php') ? 'active' : ''; ?>"><i class="fas fa-history"></i> <span>Riwayat</span></a>
+                <a href="laporan.php" class="<?php echo ($current_page == 'laporan.php') ? 'active' : ''; ?>"><i class="fas fa-chart-pie"></i> <span>Laporan</span></a>
+            </nav>
+            <a href="logout.php" class="logout" id="logoutButton"><i class="fas fa-sign-out-alt"></i> <span>Keluar</span></a>
+        </aside>
+<?php endif; ?>
+```
+
+**`includes/footer.php`** (Penyesuaian untuk halaman auth yang baru)
+```php
+<?php
+// $current_page dari header.php
+?>
+<?php if (!in_array($current_page, ['login.php', 'register.php', 'forgot_password.php', 'reset_password.php'])): ?>
+    </div> <!-- Penutup div.content -->
 
     <div id="notification-popup">
-        <!-- ... (konten notifikasi Anda sudah baik) ... -->
         <div class="notification-header">
              <h4>Notifikasi</h4>
              <button id="clearAllNotificationsBtn" class="btn-clear-notif" title="Hapus semua notifikasi">Hapus Semua</button>
         </div>
         <ul id="notification-list">
-            <?php
+            <?php 
             $current_session_notifications_for_popup = [];
             if (isset($_SESSION['notification_messages']) && is_array($_SESSION['notification_messages'])) {
                 $current_session_notifications_for_popup = $_SESSION['notification_messages'];
+                // Sortir notifikasi, terbaru di atas
                 usort($current_session_notifications_for_popup, function($a, $b) {
                     return ($b['time'] ?? 0) - ($a['time'] ?? 0);
                 });
@@ -660,7 +472,7 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
             $has_current_notifications_for_popup = !empty($current_session_notifications_for_popup);
             ?>
             <?php if ($has_current_notifications_for_popup): ?>
-                <?php foreach ($current_session_notifications_for_popup as $notif_item):
+                <?php foreach ($current_session_notifications_for_popup as $notif_item): 
                     $time_ago_popup = 'Beberapa waktu lalu';
                     if (isset($notif_item['time'])) {
                         try {
@@ -679,11 +491,11 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
                         if($notif_item['type'] == 'success') $message_class_popup = 'notif-success';
                         else if($notif_item['type'] == 'error') $message_class_popup = 'notif-error';
                         else if($notif_item['type'] == 'info') $message_class_popup = 'notif-info';
-                        else if($notif_item['type'] == 'deadline_soon' || $notif_item['type'] == 'overdue_task') $message_class_popup = 'notif-deadline_soon';
+                        else if($notif_item['type'] == 'deadline_soon') $message_class_popup = 'notif-deadline_soon';
                     }
                 ?>
                     <li class="<?php echo $message_class_popup; ?>">
-                        <?php echo $notif_item['message']; ?>
+                        <?php echo $notif_item['message']; // Pesan sudah HTML dari header.php ?> 
                         <small class="notif-time"><?php echo $time_ago_popup; ?></small>
                     </li>
                 <?php endforeach; ?>
@@ -695,13 +507,16 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
     <div id="calendar-popup">
         <div id="calendar-container-popup"></div>
     </div>
-
+    
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/id.js"></script>
     <script>
+        // Variabel global untuk halaman laporan jika diperlukan
+        var tasksForCalendar = {}; // Untuk menyimpan tugas yang diambil via AJAX
+
         document.addEventListener('DOMContentLoaded', () => {
-            const bodyElement = document.body;
-            const htmlElement = document.documentElement;
+            const bodyElement = document.body; 
+            const htmlElement = document.documentElement; 
             const bellIcon = document.getElementById('bellIcon');
             const notificationPopup = document.getElementById('notification-popup');
             const notificationListUl = document.getElementById('notification-list');
@@ -710,16 +525,15 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
             const calendarIcon = document.getElementById('calendarIcon');
             const calendarPopup = document.getElementById('calendar-popup');
 
-            // ... (fungsi togglePopup Anda) ...
             function togglePopup(popupElement, iconElement, otherPopupElement) {
                 if (otherPopupElement && otherPopupElement.classList.contains('show')) {
                     otherPopupElement.classList.remove('show');
                 }
                 popupElement.classList.toggle('show');
-
+                
                 if (popupElement === notificationPopup && popupElement.classList.contains('show')) {
                     if (bellIcon && bellIcon.classList.contains('has-notif')) {
-                        fetch('mark_notifications_viewed.php') // Pastikan path ini benar dari root
+                        fetch('mark_notifications_viewed.php') // AJAX untuk menandai notifikasi UI telah dilihat
                             .then(response => response.json())
                             .then(data => {
                                 if(data.success) {
@@ -730,25 +544,24 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
                 }
             }
 
-
-            if (bellIcon && notificationPopup) {
-                bellIcon.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    togglePopup(notificationPopup, bellIcon, calendarPopup);
+            if (bellIcon && notificationPopup) { 
+                bellIcon.addEventListener('click', (e) => { 
+                    e.stopPropagation(); 
+                    togglePopup(notificationPopup, bellIcon, calendarPopup); 
                 });
             }
 
             if (clearAllNotificationsBtn && notificationListUl) {
                 clearAllNotificationsBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (confirm('Anda yakin ingin menghapus semua notifikasi?')) {
-                        fetch('ajax_clear_all_notifications.php') // Pastikan path ini benar
+                    e.stopPropagation(); 
+                    if (confirm('Anda yakin ingin menghapus semua notifikasi ini?')) {
+                        fetch('ajax_clear_all_notifications.php') // AJAX untuk menghapus notifikasi dari session
                             .then(response => response.json())
                             .then(data => {
                                 if (data.success) {
                                     notificationListUl.innerHTML = '<li class="no-notifications">Tidak ada notifikasi baru.</li>';
                                     if (bellIcon && bellIcon.classList.contains('has-notif')) {
-                                        bellIcon.classList.remove('has-notif');
+                                        bellIcon.classList.remove('has-notif'); 
                                     }
                                 } else { alert('Gagal menghapus notifikasi.'); }
                             })
@@ -759,57 +572,65 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
                     }
                 });
             }
-
-            if (calendarIcon && calendarPopup) {
-                const calendarContainerPopup = document.getElementById('calendar-container-popup');
-                if(calendarContainerPopup){ // Cek elemen ada
-                    flatpickr(calendarContainerPopup, { inline: true, dateFormat: "d/m/Y", locale: "id" });
-                }
-                calendarIcon.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    togglePopup(calendarPopup, calendarIcon, notificationPopup);
+            
+            const calendarContainerPopup = document.getElementById('calendar-container-popup');
+            if (calendarIcon && calendarPopup && calendarContainerPopup) { 
+                 flatpickr(calendarContainerPopup, { inline: true, dateFormat: "d/m/Y", locale: "id" });
+                calendarIcon.addEventListener('click', function (e) { 
+                    e.stopPropagation(); 
+                    togglePopup(calendarPopup, calendarIcon, notificationPopup); 
                 });
             }
 
-            document.addEventListener('click', function (e) {
-                if (notificationPopup && notificationPopup.classList.contains('show') && !notificationPopup.contains(e.target) && e.target !== bellIcon) {
-                    notificationPopup.classList.remove('show');
+            document.addEventListener('click', function (e) { 
+                if (notificationPopup && notificationPopup.classList.contains('show') && !notificationPopup.contains(e.target) && e.target !== bellIcon) { 
+                    notificationPopup.classList.remove('show'); 
                 }
-                if (calendarPopup && calendarPopup.classList.contains('show') && !calendarPopup.contains(e.target) && e.target !== calendarIcon) {
-                    calendarPopup.classList.remove('show');
+                if (calendarPopup && calendarPopup.classList.contains('show') && !calendarPopup.contains(e.target) && e.target !== calendarIcon) { 
+                    calendarPopup.classList.remove('show'); 
                 }
             });
 
-            // ... (sisa JavaScript Anda untuk flatpickr, deleteButtons, dll sudah baik) ...
-            // Sesuaikan selector jika perlu, misal untuk report date range
-            const dateInputs = document.querySelectorAll('input[type="text"][id$="Date"], input[type="text"][id$="DueDate"], input[type="text"][id*="DateRange"]');
+            // Inisialisasi Flatpickr untuk input tanggal
+            const dateInputs = document.querySelectorAll(
+                'input[type="text"][id$="Date"], input[type="text"][id$="DueDate"], ' +
+                'input[type="text"][id$="DateRange"], input[type="text"][id="filterHistoryDateRange"], ' +
+                'input[type="text"][id="reportDateRange"]' // Tambahan untuk laporan
+            );
             dateInputs.forEach(input => {
                 let config = { dateFormat: "d/m/Y", locale: "id", allowInput: true };
                 if (input.id === 'taskDueDate' || input.id === 'editTaskDueDate') {
                      config.minDate = "today";
                 }
-                // Tambahkan untuk date range di laporan.php
                 if (input.id === 'filterHistoryDateRange' || input.id === 'filterPerformanceDateRange' || input.id === 'reportDateRange') {
                     config.mode = "range";
-                } else if (input.id === 'filterDate') {
+                } else if (input.id === 'filterDate') { // Untuk filter di manajemen_tugas
                     config.mode = "single";
                 }
                 flatpickr(input, config);
             });
 
-            // Tema Gelap & Sidebar Toggle (logika Anda sudah baik, pastikan selector id benar)
+            // Konfirmasi hapus
+            const deleteButtons = document.querySelectorAll('a.delete-btn');
+            deleteButtons.forEach(button => {
+                button.addEventListener('click', function(event) {
+                    if (!confirm('Anda yakin ingin menghapus item ini?')) {
+                        event.preventDefault();
+                    }
+                });
+            });
+
+            // Tema Gelap Logic (dari kode Anda, sedikit penyesuaian jika perlu)
             const themeToggleCheckbox = document.getElementById('themeToggleCheckbox');
             function updateThemeOnPage(theme) {
-                // ... (logika Anda)
-                 if (theme === 'dark-theme') {
+                if (theme === 'dark-theme') {
                     htmlElement.classList.add('dark-theme-active');
                     if (themeToggleCheckbox) themeToggleCheckbox.checked = true;
-                } else {
+                } else { 
                     htmlElement.classList.remove('dark-theme-active');
                     if (themeToggleCheckbox) themeToggleCheckbox.checked = false;
                 }
             }
-            // ... (sisa logika tema Anda) ...
             const initialThemeIsDark = htmlElement.classList.contains('dark-theme-active');
             if (initialThemeIsDark) {
                 if (themeToggleCheckbox) themeToggleCheckbox.checked = true;
@@ -820,63 +641,47 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
                 themeToggleCheckbox.addEventListener('change', function() {
                     const newTheme = this.checked ? 'dark-theme' : 'light-theme';
                     updateThemeOnPage(newTheme);
-                    localStorage.setItem('theme', newTheme);
+                    localStorage.setItem('theme', newTheme); 
                 });
             }
 
-
+            // Sidebar Toggle Logic (dari kode Anda)
             const appTitleToggle = document.getElementById('appTitleToggle');
-            const sidebarElement = document.getElementById('sidebar');
-
+            const sidebarElement = document.getElementById('sidebar'); 
             if (appTitleToggle && sidebarElement) {
                 function setSidebarState(isHidden) {
-                    if (isHidden) {
-                        bodyElement.classList.add('sidebar-hidden');
-                        localStorage.setItem('sidebarHidden', 'true'); // Simpan ke localStorage
-                    } else {
-                        bodyElement.classList.remove('sidebar-hidden');
-                        localStorage.setItem('sidebarHidden', 'false'); // Simpan ke localStorage
-                    }
+                    if (isHidden) bodyElement.classList.add('sidebar-hidden');
+                    else bodyElement.classList.remove('sidebar-hidden');
                 }
-
-                // Initial state based on localStorage and screen width
-                const sidebarHiddenStored = localStorage.getItem('sidebarHidden') === 'true';
                 if (window.innerWidth > 768) {
+                    const sidebarHiddenStored = localStorage.getItem('sidebarHidden') === 'true';
                     setSidebarState(sidebarHiddenStored);
                 } else {
-                    setSidebarState(false); // Always show on mobile load, but don't store this preference for desktop
+                    setSidebarState(false); 
                 }
-
                 appTitleToggle.addEventListener('click', () => {
-                    if (window.innerWidth > 768) { // Only allow toggle on desktop
+                    if (window.innerWidth > 768) { 
                         const isNowHidden = bodyElement.classList.toggle('sidebar-hidden');
                         localStorage.setItem('sidebarHidden', isNowHidden);
                     }
                 });
-
                 window.addEventListener('resize', () => {
                     if (window.innerWidth <= 768) {
-                        // On mobile, ensure sidebar is not in 'hidden' state visually,
-                        // but don't overwrite the desktop preference in localStorage.
-                        bodyElement.classList.remove('sidebar-hidden');
+                        setSidebarState(false); 
                     } else {
-                        // Re-apply stored state on resize to desktop
-                        const sidebarHiddenStoredOnResize = localStorage.getItem('sidebarHidden') === 'true';
-                        setSidebarState(sidebarHiddenStoredOnResize);
+                        const sidebarHiddenStored = localStorage.getItem('sidebarHidden') === 'true';
+                        setSidebarState(sidebarHiddenStored);
                     }
                 });
             }
 
-            // Klik card tugas (logika Anda sudah baik)
-            // ...
-             if (document.querySelector('.main-content-manajemen')) {
+            // Klik Card Tugas untuk Ubah Status (Manajemen - dari kode Anda)
+            if (document.querySelector('.main-content-manajemen')) {
                 const taskListContainerManajemen = document.getElementById('managementTaskList');
-
                 if (taskListContainerManajemen) {
                     taskListContainerManajemen.addEventListener('click', function(event) {
-                        // ... (logika Anda) ...
                         const card = event.target.closest('.task-item-card[data-task-id]');
-                        if (!card) return;
+                        if (!card) return; 
 
                         if (event.target.closest('.task-actions') || event.target.closest('a.task-title-link')) {
                             return;
@@ -886,32 +691,22 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
                         const currentStatus = card.dataset.currentStatus;
                         let nextStatus = '';
                         let nextStatusTextForUI = '';
-
                         let currentStatusClass = 'status-' + currentStatus.toLowerCase().replace(/ /g, '-');
                         let nextStatusClass = '';
 
                         if (currentStatus === 'Not Started') {
-                            nextStatus = 'In Progress';
-                            nextStatusTextForUI = 'Dikerjakan';
-                            nextStatusClass = 'status-in-progress';
+                            nextStatus = 'In Progress'; nextStatusTextForUI = 'Dikerjakan'; nextStatusClass = 'status-in-progress';
                         } else if (currentStatus === 'In Progress') {
-                            nextStatus = 'Completed';
-                            nextStatusTextForUI = 'Selesai';
-                            nextStatusClass = 'status-completed-history';
-                        } else {
-                            return;
-                        }
+                            nextStatus = 'Completed'; nextStatusTextForUI = 'Selesai'; nextStatusClass = 'status-completed-history'; 
+                        } else { return; }
 
                         const statusTextElement = card.querySelector('.meta-info .task-status-text');
+                        
+                        card.classList.remove(currentStatusClass); card.classList.add(nextStatusClass);
+                        card.dataset.currentStatus = nextStatus; 
+                        if (statusTextElement) { statusTextElement.textContent = nextStatusTextForUI; }
 
-                        card.classList.remove(currentStatusClass);
-                        card.classList.add(nextStatusClass);
-                        card.dataset.currentStatus = nextStatus;
-                        if (statusTextElement) {
-                            statusTextElement.textContent = nextStatusTextForUI;
-                        }
-
-                        fetch('ajax_update_task_status.php', { // Pastikan path ini benar
+                        fetch('ajax_update_task_status.php', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded', },
                             body: `task_id=${taskId}&new_status=${nextStatus}`
@@ -919,29 +714,20 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                if (statusTextElement && data.new_status_text) {
-                                    statusTextElement.textContent = data.new_status_text;
-                                }
+                                if (statusTextElement && data.new_status_text) { statusTextElement.textContent = data.new_status_text; }
                                 if (data.is_completed) {
                                     card.style.transition = 'opacity 0.4s ease-out, transform 0.4s ease-out, max-height 0.5s ease-in-out, padding 0.5s ease-in-out, margin 0.5s ease-in-out';
-                                    card.style.opacity = '0';
-                                    card.style.transform = 'scale(0.9)';
-                                    card.style.maxHeight = '0px';
-                                    card.style.paddingTop = '0px';
-                                    card.style.paddingBottom = '0px';
-                                    card.style.marginBottom = '0px';
+                                    card.style.opacity = '0'; card.style.transform = 'scale(0.9)';
+                                    card.style.maxHeight = '0px'; card.style.paddingTop = '0px'; card.style.paddingBottom = '0px'; card.style.marginBottom = '0px';
                                     setTimeout(() => {
                                         card.remove();
-                                        if (taskListContainerManajemen.children.length === 0) {
-                                            if (!taskListContainerManajemen.querySelector('.no-tasks-message')) {
-                                                taskListContainerManajemen.innerHTML = '<p class="no-tasks-message">Tidak ada tugas aktif yang sesuai.</p>';
-                                            }
+                                        if (taskListContainerManajemen.children.length === 0 && !taskListContainerManajemen.querySelector('.no-tasks-message')) {
+                                            taskListContainerManajemen.innerHTML = '<p class="no-tasks-message">Tidak ada tugas aktif yang sesuai.</p>';
                                         }
                                     }, 500);
                                 }
-                            } else {
-                                card.classList.remove(nextStatusClass);
-                                card.classList.add(currentStatusClass);
+                            } else { // Rollback
+                                card.classList.remove(nextStatusClass); card.classList.add(currentStatusClass);
                                 card.dataset.currentStatus = currentStatus;
                                 if (statusTextElement) {
                                      const originalStatusText = currentStatus === 'Not Started' ? 'Belum Mulai' : (currentStatus === 'In Progress' ? 'Dikerjakan' : 'Selesai');
@@ -950,10 +736,9 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
                                 alert('Gagal memperbarui status: ' + (data.message || 'Error tidak diketahui.'));
                             }
                         })
-                        .catch(error => {
+                        .catch(error => { // Rollback
                             console.error('Error AJAX:', error);
-                            card.classList.remove(nextStatusClass);
-                            card.classList.add(currentStatusClass);
+                            card.classList.remove(nextStatusClass); card.classList.add(currentStatusClass);
                             card.dataset.currentStatus = currentStatus;
                             if (statusTextElement) {
                                 const originalStatusText = currentStatus === 'Not Started' ? 'Belum Mulai' : (currentStatus === 'In Progress' ? 'Dikerjakan' : 'Selesai');
@@ -961,12 +746,31 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
                             }
                             alert('Terjadi kesalahan koneksi saat memperbarui status.');
                         });
-
                     });
                 }
             }
 
+             // Preview gambar profil saat edit
+            const editProfileImageInput = document.getElementById('editProfileImageFile');
+            const currentImagePreview = document.getElementById('currentImagePreview');
+            if (editProfileImageInput && currentImagePreview) {
+                editProfileImageInput.addEventListener('change', function(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            currentImagePreview.src = e.target.result;
+                        }
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+
         });
+    </script>
+<?php else: // Untuk halaman auth, tidak ada skrip JS kompleks ini ?>
+    <script>
+        // Skrip minimal jika diperlukan untuk halaman auth
     </script>
 <?php endif; ?>
 </body>
@@ -975,42 +779,14 @@ $current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan 
 if (isset($conn) && $conn instanceof mysqli) {
     $conn->close();
 }
-// Hapus output buffer jika ada, untuk menghindari masalah header
-if (ob_get_level() > 0) {
-    ob_end_flush();
-}
 ?>
 ```
 
-**5.4. `includes/sidebar.php`**
-Tambahkan link ke halaman Laporan.
+**`login.php`** (Modifikasi untuk Google Login & Lupa Password)
 ```php
 <?php
-// includes/sidebar.php
-$current_page = $current_page ?? basename($_SERVER['SCRIPT_NAME']); // Pastikan terdefinisi
-?>
-<?php if (!in_array($current_page, ['login.php', 'register.php', 'forgot_password.php', 'reset_password.php'])): ?>
-        <aside class="sidebar" id="sidebar">
-            <nav class="menu">
-                <a href="dashboard.php" class="<?php echo ($current_page == 'dashboard.php') ? 'active' : ''; ?>"><i class="fas fa-home"></i> <span>Dasbor</span></a>
-                <a href="manajemen_tugas.php" class="<?php echo ($current_page == 'manajemen_tugas.php' || $current_page == 'edit_tugas.php') ? 'active' : ''; ?>"><i class="fas fa-tasks"></i> <span>Kelola Tugas</span></a>
-                <a href="tambah_tugas.php" class="<?php echo ($current_page == 'tambah_tugas.php') ? 'active' : ''; ?>"><i class="fas fa-plus-circle"></i> <span>Tambah Tugas</span></a>
-                <a href="riwayat.php" class="<?php echo ($current_page == 'riwayat.php') ? 'active' : ''; ?>"><i class="fas fa-history"></i> <span>Riwayat</span></a>
-                <a href="laporan.php" class="<?php echo ($current_page == 'laporan.php') ? 'active' : ''; ?>"><i class="fas fa-chart-pie"></i> <span>Laporan</span></a>
-            </nav>
-            <a href="logout.php" class="logout" id="logoutButton"><i class="fas fa-sign-out-alt"></i> <span>Keluar</span></a>
-        </aside>
-<?php endif; ?>
-```
-
-**5.5. `login.php`**
-Tambahkan tombol "Login dengan Google" dan link "Lupa Password".
-```php
-<?php
-// login.php
-$page_title = "Masuk"; // Untuk <title> di header.php
-require_once 'includes/config.php'; // Untuk GOOGLE_CLIENT_ID dan session
-require_once 'includes/db.php';
+$page_title = "Masuk";
+require_once 'includes/header.php'; // header.php sudah mengandung db.php dan session_start()
 
 $errors = [];
 
@@ -1019,504 +795,178 @@ if (isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Google Login URL
-$client = new Google_Client();
-$client->setClientId(GOOGLE_CLIENT_ID);
-$client->setClientSecret(GOOGLE_CLIENT_SECRET);
-$client->setRedirectUri(GOOGLE_REDIRECT_URI);
-$client->addScope("email");
-$client->addScope("profile");
-$google_login_url = $client->createAuthUrl();
+// Link login Google
+$google_login_url = $google_client->createAuthUrl();
 
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (isset($_POST['login_manual'])) { // Form login manual
+        $email = trim($_POST['email']);
+        $password = $_POST['password'];
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'])) { // Pastikan ini form login biasa
-    $email = trim($_POST['email']);
-    $password = $_POST['password'];
+        if (empty($email)) $errors[] = "Alamat email wajib diisi.";
+        if (empty($password)) $errors[] = "Kata sandi wajib diisi.";
 
-    if (empty($email)) $errors[] = "Alamat email wajib diisi.";
-    if (empty($password)) $errors[] = "Kata sandi wajib diisi.";
+        if (empty($errors)) {
+            $stmt = $conn->prepare("SELECT id, username, password, profile_image FROM users WHERE email = ?");
+            $stmt->bind_param("s", $email);
+            $stmt->execute();
+            $result = $stmt->get_result();
 
-    if (empty($errors)) {
-        $stmt = $conn->prepare("SELECT id, username, password, profile_image, is_google_verified FROM users WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        if ($user = $result->fetch_assoc()) {
-            // Jika akun dibuat via Google dan belum set password manual
-            if ($user['is_google_verified'] == 1 && empty($user['password'])) {
-                $errors[] = "Akun ini terdaftar melalui Google. Silakan masuk menggunakan Google atau atur kata sandi manual jika fitur tersebut tersedia.";
-            } elseif (password_verify($password, $user['password'])) {
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['profile_image'] = $user['profile_image'];
-                header("Location: dashboard.php");
-                exit();
+            if ($user = $result->fetch_assoc()) {
+                if ($user['password'] !== null && password_verify($password, $user['password'])) {
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['profile_image'] = $user['profile_image'];
+                    
+                    header("Location: dashboard.php");
+                    exit();
+                } else {
+                    $errors[] = "Email atau password salah.";
+                }
             } else {
                 $errors[] = "Email atau password salah.";
             }
-        } else {
-            $errors[] = "Email atau password salah.";
+            $stmt->close();
         }
-        $stmt->close();
     }
 }
 ?>
-<?php require_once 'includes/header.php'; ?>
 
-    <div class="auth-container">
-        <div class="logo-container">
-            <h1>List In</h1>
-        </div>
-        <h2>Selamat Datang Kembali!</h2>
-        <p class="subtitle">Masuk untuk melanjutkan dan mengatur tugas Anda.</p>
-
-        <?php if (isset($_SESSION['success_message'])): ?>
-            <div style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                <p><?php echo $_SESSION['success_message']; ?></p>
-            </div>
-            <?php unset($_SESSION['success_message']); ?>
-        <?php endif; ?>
-        <?php if (isset($_SESSION['error_message'])): ?>
-            <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                <p><?php echo $_SESSION['error_message']; ?></p>
-            </div>
-            <?php unset($_SESSION['error_message']); ?>
-        <?php endif; ?>
-
-        <?php if (!empty($errors)): ?>
-            <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                <?php foreach ($errors as $error): ?>
-                    <p><?php echo $error; ?></p>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-
-        <form id="loginForm" method="POST" action="login.php">
-            <div class="form-group">
-                <label for="email">Alamat Email</label>
-                <input type="email" id="email" name="email" required placeholder="cth: pengguna@email.com" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
-            </div>
-            <div class="form-group">
-                <label for="password">Kata Sandi</label>
-                <input type="password" id="password" name="password" required placeholder="Masukkan kata sandi Anda">
-            </div>
-            <div class="form-group" style="text-align: right; margin-bottom: 10px;">
-                <a href="forgot_password.php" style="font-size: 0.8rem; color: #7e47b8;">Lupa Kata Sandi?</a>
-            </div>
-            <button type="submit" class="btn-submit">Masuk Akun</button>
-        </form>
-        <div style="text-align: center; margin: 15px 0; color: #777;">ATAU</div>
-        <a href="<?php echo htmlspecialchars($google_login_url); ?>" class="btn-submit" style="background-color: #db4437; display: flex; align-items: center; justify-content: center; text-decoration:none;">
-            <i class="fab fa-google" style="margin-right: 8px;"></i> Masuk dengan Google
-        </a>
-        <p class="auth-link">Belum punya akun? <a href="register.php">Daftar sekarang</a></p>
+<div class="auth-container">
+    <div class="logo-container">
+        <h1>List In</h1>
     </div>
+    <h2>Selamat Datang Kembali!</h2>
+    <p class="subtitle">Masuk untuk melanjutkan dan mengatur tugas Anda.</p>
+
+    <?php if (isset($_SESSION['success_message'])): ?>
+        <div style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align:left;">
+            <?php echo $_SESSION['success_message']; ?>
+        </div>
+        <?php unset($_SESSION['success_message']); ?>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['error_message'])): // Untuk error dari reset password ?>
+        <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align:left;">
+            <?php echo $_SESSION['error_message']; ?>
+        </div>
+        <?php unset($_SESSION['error_message']); ?>
+    <?php endif; ?>
+
+    <?php if (!empty($errors)): ?>
+        <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align:left;">
+            <?php foreach ($errors as $error): ?>
+                <p><?php echo $error; ?></p>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <form id="loginForm" method="POST" action="login.php">
+        <div class="form-group">
+            <label for="email">Alamat Email</label>
+            <input type="email" id="email" name="email" required placeholder="cth: pengguna@email.com" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
+        </div>
+        <div class="form-group">
+            <label for="password">Kata Sandi</label>
+            <input type="password" id="password" name="password" required placeholder="Masukkan kata sandi Anda">
+        </div>
+        <div style="text-align: right; margin-bottom: 15px; font-size: 0.8rem;">
+            <a href="forgot_password.php" style="color: #7e47b8; text-decoration: none;">Lupa Kata Sandi?</a>
+        </div>
+        <button type="submit" name="login_manual" class="btn-submit">Masuk Akun</button>
+    </form>
+
+    <div style="margin-top: 20px; text-align: center; color: #555;">
+        Atau masuk dengan
+    </div>
+    <a href="<?php echo htmlspecialchars($google_login_url); ?>" class="btn-submit" style="background-color: #DB4437; margin-top:10px; display:flex; align-items:center; justify-content:center;">
+        <i class="fab fa-google" style="margin-right: 8px;"></i> Google
+    </a>
+    
+    <p class="auth-link">Belum punya akun? <a href="register.php">Daftar sekarang</a></p>
+</div>
 
 <?php require_once 'includes/footer.php'; ?>
 ```
 
-**5.6. `register.php`**
-Sudah cukup baik. Hanya tambahkan `$page_title`.
+**`google_login_callback.php` (BARU)**
 ```php
 <?php
-// register.php
-$page_title = "Daftar Akun";
-require_once 'includes/config.php';
-require_once 'includes/db.php';
-// ... sisa kode register.php Anda ...
-?>
-<?php require_once 'includes/header.php'; ?>
-    <!-- ... konten HTML form registrasi Anda ... -->
-<?php require_once 'includes/footer.php'; ?>
-```
-
-**5.7. `profil.php`**
-Tambahkan opsi untuk mengatur frekuensi laporan.
-```php
-<?php
-// profil.php
-$page_title = "Profil Saya";
-require_once 'includes/header.php'; // Sudah ada config.php
-require_once 'includes/sidebar.php';
-
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
-$user_id = $_SESSION['user_id'];
-$user_profile_data = null;
-
-if (isset($conn) && $conn) {
-    $stmt_profile = $conn->prepare("SELECT username, email, profile_image, created_at, report_frequency FROM users WHERE id = ?");
-    if ($stmt_profile) {
-        $stmt_profile->bind_param("i", $user_id);
-        $stmt_profile->execute();
-        $result_profile = $stmt_profile->get_result();
-        $user_profile_data = $result_profile->fetch_assoc();
-        $stmt_profile->close();
-    } else {
-        add_notification("Gagal mengambil data profil: " . $conn->error, "error");
-    }
-} else {
-    add_notification("Koneksi database tidak tersedia.", "error");
-}
-
-if (!$user_profile_data) {
-    $user_profile_data = ['username' => 'N/A', 'email' => 'N/A', 'profile_image' => 'images/placeholder-profile.png', 'created_at' => null, 'report_frequency' => 'none'];
-}
-
-$profile_image_display_path = (!empty($user_profile_data['profile_image']) && file_exists(__DIR__ . '/../' . $user_profile_data['profile_image']))
-                            ? BASE_URL . '/' . $user_profile_data['profile_image']
-                            : BASE_URL . '/images/placeholder-profile.png';
-$member_since = 'N/A';
-if ($user_profile_data['created_at']) {
-    try {
-        $date_joined = new DateTime($user_profile_data['created_at']);
-        $member_since = "Bergabung sejak " . $date_joined->format('d F Y');
-    } catch (Exception $e) { /* Biarkan N/A */ }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_report_settings'])) {
-    $report_frequency = $_POST['report_frequency'] ?? 'none';
-    $valid_frequencies = ['none', 'daily', 'weekly', 'monthly'];
-    if (in_array($report_frequency, $valid_frequencies)) {
-        $stmt_update_freq = $conn->prepare("UPDATE users SET report_frequency = ? WHERE id = ?");
-        if ($stmt_update_freq) {
-            $stmt_update_freq->bind_param("si", $report_frequency, $user_id);
-            if ($stmt_update_freq->execute()) {
-                add_notification("Pengaturan laporan berhasil disimpan.", "success");
-                $user_profile_data['report_frequency'] = $report_frequency; // Update data lokal
-            } else {
-                add_notification("Gagal menyimpan pengaturan laporan: " . $stmt_update_freq->error, "error");
-            }
-            $stmt_update_freq->close();
-        }
-    } else {
-        add_notification("Frekuensi laporan tidak valid.", "error");
-    }
-}
-
-?>
-<?php // require_once 'includes/header.php'; // Sudah dipanggil di atas ?>
-
-        <main class="main">
-            <h2 class="page-title">Profil</h2>
-            <?php
-                // Menampilkan notifikasi dari session
-                if (isset($_SESSION['notification_messages']) && !empty($_SESSION['notification_messages'])) {
-                    foreach ($_SESSION['notification_messages'] as $key => $notif) {
-                        $alert_type = $notif['type'] === 'success' ? 'success' : ($notif['type'] === 'error' ? 'danger' : 'info');
-                        echo "<div class='alert alert-{$alert_type}' role='alert' style='margin-bottom:15px; padding:10px; border-radius:5px; background-color:" . ($alert_type == 'success' ? '#d4edda; color:#155724;' : ($alert_type == 'danger' ? '#f8d7da; color:#721c24;' : '#cce5ff; color:#004085;')) . "'>{$notif['message']}</div>";
-                    }
-                    unset($_SESSION['notification_messages']); // Hapus notifikasi setelah ditampilkan
-                    unset($_SESSION['has_unread_notifications_badge']); // Reset badge juga
-                }
-            ?>
-
-            <div class="profile-page-container">
-                <div class="profile-info-card">
-                    <br><br>
-                    <img src="<?php echo htmlspecialchars($profile_image_display_path); ?>?t=<?php echo time(); ?>" alt="Foto Profil" id="profileImageMain">
-                    <h2 id="profileName"><?php echo htmlspecialchars($user_profile_data['username']); ?></h2>
-                    <p id="profileEmail"><?php echo htmlspecialchars($user_profile_data['email']); ?></p>
-                    <p class="member-since"><?php echo $member_since; ?></p>
-                </div>
-
-                <div class="profile-actions-card">
-                    <h3 class="card-title">Pengaturan Akun</h3>
-                    <div class="profile-action-buttons">
-                        <a href="edit_profil.php" class="btn btn-primary">
-                            <i class="fas fa-user-edit"></i> Edit Informasi Profil
-                        </a>
-                        <a href="ubah_password.php" class="btn btn-secondary">
-                            <i class="fas fa-key"></i> Ubah Kata Sandi
-                        </a>
-                    </div>
-
-                    <h3 class="card-title" style="margin-top: 25px;">Preferensi Tampilan</h3>
-                    <div class="profile-theme-settings">
-                        <div class="theme-toggle-item">
-                            <span><i class="fas fa-palette"></i> Tema Gelap</span>
-                            <label class="theme-toggle-switch">
-                                <input type="checkbox" id="themeToggleCheckbox">
-                                <span class="theme-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <h3 class="card-title" style="margin-top: 25px;">Pengaturan Laporan Email</h3>
-                    <form method="POST" action="profil.php">
-                        <div class="form-group">
-                            <label for="report_frequency" style="font-weight:normal; display:inline-block; margin-right:10px;">Kirim laporan progres ke email saya:</label>
-                            <select name="report_frequency" id="report_frequency" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc;">
-                                <option value="none" <?php echo ($user_profile_data['report_frequency'] == 'none') ? 'selected' : ''; ?>>Jangan Kirim</option>
-                                <option value="daily" <?php echo ($user_profile_data['report_frequency'] == 'daily') ? 'selected' : ''; ?>>Setiap Hari</option>
-                                <option value="weekly" <?php echo ($user_profile_data['report_frequency'] == 'weekly') ? 'selected' : ''; ?>>Setiap Minggu</option>
-                                <option value="monthly" <?php echo ($user_profile_data['report_frequency'] == 'monthly') ? 'selected' : ''; ?>>Setiap Bulan</option>
-                            </select>
-                        </div>
-                        <button type="submit" name="save_report_settings" class="btn btn-primary" style="margin-top:10px; font-size:0.9rem; padding:8px 15px;">
-                            <i class="fas fa-save"></i> Simpan Frekuensi Laporan
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </main>
-<?php require_once 'includes/footer.php'; ?>
-```
-
-**5.8. `ubah_password.php`**
-Jika pengguna login via Google dan belum punya password, halaman ini idealnya tidak bisa diakses atau formnya disembunyikan dengan pesan. Namun, untuk menjaga kesederhanaan, kita asumsikan mereka bisa set password jika mau.
-```php
-<?php
-// ubah_password.php
-$page_title = "Ubah Kata Sandi";
-require_once 'includes/header.php';
-require_once 'includes/sidebar.php';
-
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
-$user_id = $_SESSION['user_id'];
-
-$user_has_password = true; // Asumsi awal
-$stmt_check_pass = $conn->prepare("SELECT password FROM users WHERE id = ?");
-$stmt_check_pass->bind_param("i", $user_id);
-$stmt_check_pass->execute();
-$result_pass = $stmt_check_pass->get_result();
-$user_pass_data = $result_pass->fetch_assoc();
-$stmt_check_pass->close();
-if ($user_pass_data && empty($user_pass_data['password'])) {
-    $user_has_password = false; // User login via Google dan belum set password
-}
-
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $currentPassword = $_POST['currentPassword'] ?? ''; // Default ke string kosong jika tidak ada
-    $newPassword = $_POST['newPassword'];
-    $confirmNewPassword = $_POST['confirmNewPassword'];
-    $validation_errors_found = false;
-
-    // Jika user tidak punya password (misal dari Google login), field currentPassword tidak wajib
-    if ($user_has_password && empty($currentPassword)) {
-        add_notification("Kata sandi saat ini wajib diisi.", "error");
-        $validation_errors_found = true;
-    }
-    if (empty($newPassword) || empty($confirmNewPassword)) {
-        add_notification("Kata sandi baru dan konfirmasi wajib diisi.", "error");
-        $validation_errors_found = true;
-    }
-
-    if (!$validation_errors_found) {
-        $can_proceed_update = false;
-        if ($user_has_password) {
-            if ($user_pass_data && password_verify($currentPassword, $user_pass_data['password'])) {
-                $can_proceed_update = true;
-            } else {
-                add_notification("Kata sandi saat ini salah.", "error");
-                $validation_errors_found = true;
-            }
-        } else { // User tidak punya password sebelumnya, langsung set baru
-            $can_proceed_update = true;
-        }
-
-        if ($can_proceed_update && !$validation_errors_found) {
-            if (strlen($newPassword) < 6) {
-                add_notification("Kata sandi baru minimal 6 karakter.", "error");
-                $validation_errors_found = true;
-            } elseif ($newPassword !== $confirmNewPassword) {
-                add_notification("Kata sandi baru dan konfirmasi tidak cocok.", "error");
-                $validation_errors_found = true;
-            }
-
-            if (!$validation_errors_found) {
-                $hashed_new_password = password_hash($newPassword, PASSWORD_DEFAULT);
-                $stmt_update = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
-                $stmt_update->bind_param("si", $hashed_new_password, $user_id);
-                if ($stmt_update->execute()) {
-                    add_notification("Kata sandi berhasil diubah!", "success");
-                    // Jika user sebelumnya tidak punya password, sekarang punya
-                    // mungkin perlu logout dan login ulang agar session terupdate (jika ada flag `has_password`)
-                    header("Location: profil.php");
-                    exit();
-                } else {
-                    add_notification("Gagal mengubah kata sandi: " . $stmt_update->error, "error");
-                }
-                $stmt_update->close();
-            }
-        }
-    }
-}
-?>
-<?php require_once 'includes/header.php'; ?>
-
-        <main class="main">
-            <h2 class="page-title">Ubah Kata Sandi Akun</h2>
-            <?php
-                // Menampilkan notifikasi
-                if (isset($_SESSION['notification_messages']) && !empty($_SESSION['notification_messages'])) {
-                    // ... (kode display notifikasi seperti di profil.php) ...
-                     foreach ($_SESSION['notification_messages'] as $key => $notif) {
-                        $alert_type = $notif['type'] === 'success' ? 'success' : ($notif['type'] === 'error' ? 'danger' : 'info');
-                        echo "<div class='alert alert-{$alert_type}' role='alert' style='margin-bottom:15px; padding:10px; border-radius:5px; background-color:" . ($alert_type == 'success' ? '#d4edda; color:#155724;' : ($alert_type == 'danger' ? '#f8d7da; color:#721c24;' : '#cce5ff; color:#004085;')) . "'>{$notif['message']}</div>";
-                    }
-                    unset($_SESSION['notification_messages']);
-                    unset($_SESSION['has_unread_notifications_badge']);
-                }
-            ?>
-            <div class="form-container">
-                <form id="changePasswordForm" method="POST" action="ubah_password.php">
-                    <?php if ($user_has_password): ?>
-                    <div class="form-group">
-                        <label for="currentPassword">Kata Sandi Saat Ini</label>
-                        <input type="password" id="currentPassword" name="currentPassword" required placeholder="Masukkan kata sandi Anda saat ini">
-                    </div>
-                    <?php else: ?>
-                    <div class="form-group">
-                        <p style="padding: 10px; background-color: #eef1f5; border-radius: 5px; color: #3c4250;">
-                            Anda saat ini masuk menggunakan akun Google dan belum mengatur kata sandi manual. Masukkan kata sandi baru di bawah ini untuk mengaktifkan login manual.
-                        </p>
-                         <input type="hidden" name="currentPassword" value=""> <!-- Kirim kosong jika tidak ada pass -->
-                    </div>
-                    <?php endif; ?>
-                    <div class="form-group">
-                        <label for="newPassword">Kata Sandi Baru</label>
-                        <input type="password" id="newPassword" name="newPassword" minlength="6" required placeholder="Minimal 6 karakter">
-                    </div>
-                    <div class="form-group">
-                        <label for="confirmNewPassword">Konfirmasi Kata Sandi Baru</label>
-                        <input type="password" id="confirmNewPassword" name="confirmNewPassword" minlength="6" required placeholder="Ulangi kata sandi baru">
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Simpan Kata Sandi</button>
-                         <a href="profil.php" class="btn btn-secondary">Batal</a>
-                    </div>
-                </form>
-            </div>
-        </main>
-<?php require_once 'includes/footer.php'; ?>
-```
-
----
-**Langkah 6: File Baru untuk Fitur Tambahan**
-
-**6.1. `google_login.php` (Tidak diperlukan, URL dibuat di `login.php`)**
-File ini tidak benar-benar diperlukan karena URL otentikasi Google dibuat langsung di `login.php`.
-
-**6.2. `google_callback.php`**
-```php
-<?php
-// google_callback.php
-require_once 'includes/config.php'; // Untuk Client ID/Secret, DB, session
-require_once 'includes/db.php';
-
-$client = new Google_Client();
-$client->setClientId(GOOGLE_CLIENT_ID);
-$client->setClientSecret(GOOGLE_CLIENT_SECRET);
-$client->setRedirectUri(GOOGLE_REDIRECT_URI);
-$client->addScope("email");
-$client->addScope("profile");
+require_once 'includes/header.php'; // Untuk $google_client, $conn, session_start()
 
 if (isset($_GET['code'])) {
-    $token = $client->fetchAccessTokenWithAuthCode($_GET['code']);
+    $token = $google_client->fetchAccessTokenWithAuthCode($_GET['code']);
     if (isset($token['error'])) {
-        // Tangani error, redirect ke login dengan pesan error
-        $_SESSION['error_message'] = "Gagal mendapatkan token dari Google: " . $token['error_description'];
+        // Redirect ke login dengan pesan error
+        $_SESSION['error_message'] = 'Gagal otentikasi dengan Google: ' . $token['error_description'];
         header('Location: login.php');
-        exit;
+        exit();
     }
-    $client->setAccessToken($token['access_token']);
+    $google_client->setAccessToken($token['access_token']);
 
-    // Dapatkan info profil pengguna
-    $google_oauth = new Google_Service_Oauth2($client);
+    $google_oauth = new Google_Service_Oauth2($google_client);
     $google_account_info = $google_oauth->userinfo->get();
+    
+    $google_id = $google_account_info->id;
     $email = $google_account_info->email;
     $name = $google_account_info->name;
-    $google_id = $google_account_info->id;
-    $profile_pic_url = $google_account_info->picture;
+    $picture = $google_account_info->picture;
 
-    // Cek apakah pengguna sudah ada di database
-    $stmt = $conn->prepare("SELECT id, username, profile_image FROM users WHERE email = ? OR google_id = ?");
-    $stmt->bind_param("ss", $email, $google_id);
+    // Cek apakah user dengan google_id ini sudah ada
+    $stmt = $conn->prepare("SELECT id, username, profile_image FROM users WHERE google_id = ?");
+    $stmt->bind_param("s", $google_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
     $stmt->close();
 
-    if ($user) {
-        // Pengguna sudah ada, loginkan
+    if ($user) { // User ditemukan dengan google_id
         $_SESSION['user_id'] = $user['id'];
-        $_SESSION['username'] = $user['username']; // Bisa jadi username beda dari Google name
-
-        // Update google_id jika login via email tapi google_id belum ada
-        if (empty($user['google_id']) && !empty($google_id)) {
-            $stmt_update_gid = $conn->prepare("UPDATE users SET google_id = ?, is_google_verified = 1 WHERE id = ?");
-            $stmt_update_gid->bind_param("si", $google_id, $user['id']);
-            $stmt_update_gid->execute();
-            $stmt_update_gid->close();
-        }
-        // Update profile picture jika dari google lebih baru atau user belum punya
-        // (Ini bisa lebih kompleks, untuk sekarang kita update jika berbeda)
-        // Anda mungkin ingin menyimpan gambar google ke server Anda
-        // Untuk saat ini, kita akan simpan URLnya saja atau biarkan yang ada.
-        // Jika ingin menyimpan gambar:
-        /*
-        if ($profile_pic_url && $user['profile_image'] !== $profile_pic_url) { // Atau logika lain
-            $local_image_path = 'uploads/profile_pictures/google_user_' . $user['id'] . '_' . time() . '.jpg';
-            if (copy($profile_pic_url, $local_image_path)) {
-                 $stmt_update_pic = $conn->prepare("UPDATE users SET profile_image = ? WHERE id = ?");
-                 $stmt_update_pic->bind_param("si", $local_image_path, $user['id']);
-                 $stmt_update_pic->execute();
-                 $stmt_update_pic->close();
-                 $_SESSION['profile_image'] = $local_image_path;
-            }
+        $_SESSION['username'] = $user['username'];
+        // Update foto profil jika dari Google lebih baru atau user belum punya
+        if ($picture && ($user['profile_image'] == 'images/placeholder-profile.png' || $user['profile_image'] != $picture)) {
+            $stmt_update_pic = $conn->prepare("UPDATE users SET profile_image = ? WHERE id = ?");
+            $stmt_update_pic->bind_param("si", $picture, $user['id']);
+            $stmt_update_pic->execute();
+            $stmt_update_pic->close();
+            $_SESSION['profile_image'] = $picture;
         } else {
             $_SESSION['profile_image'] = $user['profile_image'];
         }
-        */
-        $_SESSION['profile_image'] = $user['profile_image']; // Biarkan yang ada di DB dulu
-
-
     } else {
-        // Pengguna baru, daftarkan
-        // Untuk password, bisa generate random atau biarkan NULL jika is_google_verified = 1
-        // $random_password = bin2hex(random_bytes(8)); // Contoh
-        // $hashed_password = password_hash($random_password, PASSWORD_DEFAULT);
-
-        // Simpan gambar profil dari Google
-        $new_profile_image_path = 'images/placeholder-profile.png'; // default
-        if ($profile_pic_url) {
-            $upload_dir = 'uploads/profile_pictures/';
-            if (!is_dir($upload_dir)) mkdir($upload_dir, 0775, true);
-            
-            $image_extension = pathinfo(parse_url($profile_pic_url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'jpg';
-            $new_filename = 'google_user_' . $google_id . '_' . time() . '.' . $image_extension;
-            $destination = $upload_dir . $new_filename;
-            
-            // Ambil gambar dari URL Google
-            $image_content = @file_get_contents($profile_pic_url);
-            if ($image_content !== false && @file_put_contents($destination, $image_content) !== false) {
-                $new_profile_image_path = $destination;
-            }
-        }
-
-
-        $stmt = $conn->prepare("INSERT INTO users (username, email, google_id, profile_image, is_google_verified, password) VALUES (?, ?, ?, ?, 1, NULL)");
-        $stmt->bind_param("ssss", $name, $email, $google_id, $new_profile_image_path);
-        if ($stmt->execute()) {
-            $_SESSION['user_id'] = $stmt->insert_id;
-            $_SESSION['username'] = $name;
-            $_SESSION['profile_image'] = $new_profile_image_path;
-        } else {
-            $_SESSION['error_message'] = "Gagal mendaftarkan pengguna baru: " . $stmt->error;
-            header('Location: register.php');
-            exit;
-        }
+        // User dengan google_id tidak ada, cek berdasarkan email
+        $stmt = $conn->prepare("SELECT id, username, profile_image FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $user_by_email = $result->fetch_assoc();
         $stmt->close();
-    }
 
+        if ($user_by_email) { // User dengan email ini ada, link-kan google_id
+            $stmt_link = $conn->prepare("UPDATE users SET google_id = ?, profile_image = ? WHERE id = ?");
+            $new_profile_image = ($user_by_email['profile_image'] == 'images/placeholder-profile.png' && $picture) ? $picture : $user_by_email['profile_image'];
+            if ($picture && $user_by_email['profile_image'] != $picture) $new_profile_image = $picture;
+
+            $stmt_link->bind_param("ssi", $google_id, $new_profile_image, $user_by_email['id']);
+            $stmt_link->execute();
+            $stmt_link->close();
+
+            $_SESSION['user_id'] = $user_by_email['id'];
+            $_SESSION['username'] = $user_by_email['username'];
+            $_SESSION['profile_image'] = $new_profile_image;
+
+        } else { // User baru, daftarkan
+            // Password bisa dikosongkan atau di-generate random (tidak bisa login manual sampai diset)
+            $stmt_insert = $conn->prepare("INSERT INTO users (google_id, username, email, profile_image, password) VALUES (?, ?, ?, ?, NULL)");
+            $stmt_insert->bind_param("ssss", $google_id, $name, $email, $picture);
+            $stmt_insert->execute();
+            $new_user_id = $stmt_insert->insert_id;
+            $stmt_insert->close();
+
+            $_SESSION['user_id'] = $new_user_id;
+            $_SESSION['username'] = $name;
+            $_SESSION['profile_image'] = $picture;
+        }
+    }
     header('Location: dashboard.php');
     exit();
 
@@ -1527,14 +977,15 @@ if (isset($_GET['code'])) {
 ?>
 ```
 
-**6.3. `forgot_password.php`**
+**`forgot_password.php` (BARU)**
 ```php
 <?php
-// forgot_password.php
 $page_title = "Lupa Kata Sandi";
-require_once 'includes/config.php';
-require_once 'includes/db.php';
-require_once 'includes/send_email.php';
+require_once 'includes/header.php'; // Untuk $conn, PHPMailer, config
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
 
 $errors = [];
 $success_message = '';
@@ -1543,7 +994,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $email = trim($_POST['email']);
 
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "Masukkan alamat email yang valid.";
+        $errors[] = "Format email tidak valid atau kosong.";
     } else {
         $stmt = $conn->prepare("SELECT id, username FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
@@ -1553,196 +1004,213 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt->close();
 
         if ($user) {
-            $token = bin2hex(random_bytes(50));
-            $expires = new DateTime('NOW');
-            $expires->add(new DateInterval('PT1H')); // Token berlaku 1 jam
-            $expires_str = $expires->format('Y-m-d H:i:s');
+            $token = bin2hex(random_bytes(50)); // Token unik
+            $expiry_time = date("Y-m-d H:i:s", time() + 3600); // Token berlaku 1 jam
 
-            $stmt_update = $conn->prepare("UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?");
-            $stmt_update->bind_param("ssi", $token, $expires_str, $user['id']);
-
+            $stmt_update = $conn->prepare("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?");
+            $stmt_update->bind_param("ssi", $token, $expiry_time, $user['id']);
+            
             if ($stmt_update->execute()) {
-                $reset_link = BASE_URL . "/reset_password.php?token=" . $token;
-                $subject = "Reset Kata Sandi Akun List In Anda";
-                $email_body = get_email_template_header();
-                $email_body .= "<div class='content'>
-                                <h2>Halo " . htmlspecialchars($user['username']) . ",</h2>
-                                <p>Kami menerima permintaan untuk mereset kata sandi akun List In Anda. Jika Anda tidak meminta ini, abaikan email ini.</p>
-                                <p>Untuk mereset kata sandi Anda, silakan klik tautan di bawah ini:</p>
-                                <a href='" . $reset_link . "' class='button'>Reset Kata Sandi Saya</a>
-                                <p>Tautan ini akan kedaluwarsa dalam 1 jam.</p>
-                                <p>Jika tombol di atas tidak berfungsi, salin dan tempel URL berikut ke browser Anda:<br>" . $reset_link . "</p>
-                                <p>Salam,<br>Tim List In</p>
-                               </div>";
-                $email_body .= get_email_template_footer();
+                $reset_link = APP_URL . "/reset_password.php?token=" . $token;
+                
+                $mail = new PHPMailer(true);
+                try {
+                    //Server settings
+                    // $mail->SMTPDebug = SMTP::DEBUG_SERVER; // Enable verbose debug output untuk testing
+                    $mail->isSMTP();
+                    $mail->Host       = MAIL_HOST;
+                    $mail->SMTPAuth   = true;
+                    $mail->Username   = MAIL_USERNAME;
+                    $mail->Password   = MAIL_PASSWORD;
+                    $mail->SMTPSecure = MAIL_ENCRYPTION;
+                    $mail->Port       = MAIL_PORT;
 
-                if (send_email($email, $subject, $email_body)) {
-                    $success_message = "Email instruksi reset kata sandi telah dikirim ke alamat email Anda. Silakan periksa kotak masuk (dan folder spam).";
-                } else {
-                    $errors[] = "Gagal mengirim email reset. Silakan coba lagi nanti atau hubungi dukungan.";
+                    //Recipients
+                    $mail->setFrom(MAIL_FROM_ADDRESS, MAIL_FROM_NAME);
+                    $mail->addAddress($email, $user['username']);
+
+                    //Content
+                    $mail->isHTML(true);
+                    $mail->Subject = 'Reset Kata Sandi Akun List In Anda';
+                    $mail->Body    = "
+                        <div style='font-family: Arial, sans-serif; line-height: 1.6;'>
+                            <div style='max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;'>
+                                <div style='text-align: center; margin-bottom: 20px;'>
+                                    <img src='cid:logo_listin' alt='List In Logo' style='max-height: 50px;'>
+                                    <h2 style='color: #7e47b8;'>List In - Permintaan Reset Kata Sandi</h2>
+                                </div>
+                                <p>Halo " . htmlspecialchars($user['username']) . ",</p>
+                                <p>Kami menerima permintaan untuk mereset kata sandi akun List In Anda. Jika Anda tidak melakukan permintaan ini, abaikan email ini.</p>
+                                <p>Untuk mereset kata sandi Anda, silakan klik tautan di bawah ini:</p>
+                                <p style='text-align: center; margin: 20px 0;'>
+                                    <a href='" . $reset_link . "' style='background-color: #7e47b8; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Reset Kata Sandi Saya</a>
+                                </p>
+                                <p>Tautan ini akan kedaluwarsa dalam 1 jam. Jika tautan tidak berfungsi, salin dan tempel URL berikut di browser Anda:</p>
+                                <p><a href='" . $reset_link . "'>" . $reset_link . "</a></p>
+                                <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
+                                <p style='font-size: 0.9em; color: #777; text-align: center;'>Email ini dikirim secara otomatis. Mohon untuk tidak membalas email ini.<br>
+                                &copy; " . date("Y") . " List In. Hak Cipta Dilindungi.</p>
+                            </div>
+                        </div>";
+                    
+                    // Embed logo (pastikan path APP_LOGO_PATH di config.php benar)
+                    if (defined('APP_LOGO_PATH') && file_exists(APP_LOGO_PATH)) {
+                         $mail->addEmbeddedImage(APP_LOGO_PATH, 'logo_listin');
+                    }
+
+                    $mail->send();
+                    $success_message = 'Tautan reset kata sandi telah dikirim ke email Anda. Silakan periksa kotak masuk (dan folder spam).';
+                } catch (Exception $e) {
+                    $errors[] = "Gagal mengirim email. Mailer Error: {$mail->ErrorInfo}. Coba lagi nanti atau hubungi administrator.";
+                    // error_log("Mailer Error: {$mail->ErrorInfo}");
                 }
             } else {
-                $errors[] = "Gagal memproses permintaan reset. Database error.";
+                $errors[] = "Gagal menyimpan token reset. Coba lagi nanti.";
             }
             $stmt_update->close();
         } else {
-            // Untuk keamanan, jangan beritahu apakah email ada atau tidak.
-            $success_message = "Jika alamat email Anda terdaftar, Anda akan menerima email instruksi reset kata sandi.";
+            $errors[] = "Email tidak terdaftar di sistem kami.";
         }
     }
 }
 ?>
-<?php require_once 'includes/header.php'; ?>
 
-    <div class="auth-container">
-        <div class="logo-container">
-            <h1>List In</h1>
+<div class="auth-container">
+    <div class="logo-container">
+        <h1>List In</h1>
+    </div>
+    <h2>Lupa Kata Sandi Anda?</h2>
+    <p class="subtitle">Masukkan alamat email Anda di bawah ini. Kami akan mengirimkan tautan untuk mereset kata sandi.</p>
+
+    <?php if (!empty($errors)): ?>
+        <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align:left;">
+            <?php foreach ($errors as $error): ?>
+                <p><?php echo $error; ?></p>
+            <?php endforeach; ?>
         </div>
-        <h2>Lupa Kata Sandi?</h2>
-        <p class="subtitle">Masukkan alamat email Anda di bawah ini untuk menerima tautan reset kata sandi.</p>
+    <?php endif; ?>
 
-        <?php if (!empty($errors)): ?>
-            <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                <?php foreach ($errors as $error): ?><p><?php echo $error; ?></p><?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-        <?php if ($success_message): ?>
-            <div style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                <p><?php echo $success_message; ?></p>
-            </div>
-        <?php endif; ?>
-
-        <?php if (!$success_message) : // Sembunyikan form jika sukses ?>
+    <?php if ($success_message): ?>
+        <div style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align:left;">
+            <p><?php echo $success_message; ?></p>
+        </div>
+    <?php else: // Tampilkan form hanya jika belum ada pesan sukses ?>
         <form id="forgotPasswordForm" method="POST" action="forgot_password.php">
             <div class="form-group">
                 <label for="email">Alamat Email</label>
-                <input type="email" id="email" name="email" required placeholder="cth: pengguna@email.com">
+                <input type="email" id="email" name="email" required placeholder="Masukkan email terdaftar Anda" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
             </div>
             <button type="submit" class="btn-submit">Kirim Tautan Reset</button>
         </form>
-        <?php endif; ?>
-        <p class="auth-link">Ingat kata sandi Anda? <a href="login.php">Masuk di sini</a></p>
-    </div>
+    <?php endif; ?>
+    <p class="auth-link">Ingat kata sandi? <a href="login.php">Masuk di sini</a></p>
+</div>
 
 <?php require_once 'includes/footer.php'; ?>
 ```
 
-**6.4. `reset_password.php`**
+**`reset_password.php` (BARU)**
 ```php
 <?php
-// reset_password.php
 $page_title = "Reset Kata Sandi";
-require_once 'includes/config.php';
-require_once 'includes/db.php';
+require_once 'includes/header.php'; // Untuk $conn
 
 $errors = [];
 $success_message = '';
-$token_valid = false;
+$token = $_GET['token'] ?? null;
+$valid_token = false;
 $user_id_for_reset = null;
 
-if (isset($_GET['token'])) {
-    $token = $_GET['token'];
-    $stmt = $conn->prepare("SELECT id, reset_token_expires_at FROM users WHERE reset_token = ?");
-    $stmt->bind_param("s", $token);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $user = $result->fetch_assoc();
-    $stmt->close();
-
-    if ($user) {
-        $now = new DateTime();
-        $expires = new DateTime($user['reset_token_expires_at']);
-        if ($now < $expires) {
-            $token_valid = true;
-            $user_id_for_reset = $user['id'];
-        } else {
-            $errors[] = "Tautan reset kata sandi telah kedaluwarsa.";
-        }
-    } else {
-        $errors[] = "Tautan reset kata sandi tidak valid.";
-    }
-} else {
-    $errors[] = "Tautan reset tidak ditemukan.";
+if (!$token) {
+    $_SESSION['error_message'] = "Token reset tidak valid atau tidak ditemukan.";
+    header("Location: login.php");
+    exit();
 }
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && $token_valid && $user_id_for_reset) {
-    $password = $_POST['password'];
-    $confirmPassword = $_POST['confirmPassword'];
+// Validasi token
+$stmt_check_token = $conn->prepare("SELECT id FROM users WHERE reset_token = ? AND reset_token_expiry > NOW()");
+$stmt_check_token->bind_param("s", $token);
+$stmt_check_token->execute();
+$result_token = $stmt_check_token->get_result();
+if ($user_for_reset = $result_token->fetch_assoc()) {
+    $valid_token = true;
+    $user_id_for_reset = $user_for_reset['id'];
+} else {
+    $_SESSION['error_message'] = "Token reset tidak valid, kedaluwarsa, atau sudah digunakan.";
+    header("Location: login.php");
+    exit();
+}
+$stmt_check_token->close();
 
-    if (empty($password) || strlen($password) < 6) {
+
+if ($_SERVER["REQUEST_METHOD"] == "POST" && $valid_token) {
+    $new_password = $_POST['newPassword'];
+    $confirm_new_password = $_POST['confirmNewPassword'];
+
+    if (empty($new_password) || empty($confirm_new_password)) {
+        $errors[] = "Kata sandi baru dan konfirmasi wajib diisi.";
+    } elseif (strlen($new_password) < 6) {
         $errors[] = "Kata sandi baru minimal 6 karakter.";
-    } elseif ($password !== $confirmPassword) {
+    } elseif ($new_password !== $confirm_new_password) {
         $errors[] = "Kata sandi baru dan konfirmasi tidak cocok.";
     }
 
     if (empty($errors)) {
-        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-        // Hapus token setelah digunakan
-        $stmt_update = $conn->prepare("UPDATE users SET password = ?, reset_token = NULL, reset_token_expires_at = NULL WHERE id = ?");
-        $stmt_update->bind_param("si", $hashed_password, $user_id_for_reset);
-
-        if ($stmt_update->execute()) {
-            $success_message = "Kata sandi Anda berhasil direset. Silakan masuk dengan kata sandi baru Anda.";
-            $_SESSION['success_message'] = $success_message; // Untuk ditampilkan di halaman login
+        $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+        // Update password dan hapus token
+        $stmt_update_pass = $conn->prepare("UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?");
+        $stmt_update_pass->bind_param("si", $hashed_password, $user_id_for_reset);
+        
+        if ($stmt_update_pass->execute()) {
+            $_SESSION['success_message'] = "Kata sandi Anda telah berhasil direset. Silakan masuk dengan kata sandi baru.";
             header("Location: login.php");
             exit();
         } else {
-            $errors[] = "Gagal mereset kata sandi. Database error.";
+            $errors[] = "Gagal mereset kata sandi. Silakan coba lagi.";
         }
-        $stmt_update->close();
+        $stmt_update_pass->close();
     }
 }
 ?>
-<?php require_once 'includes/header.php'; ?>
 
-    <div class="auth-container">
-        <div class="logo-container">
-            <h1>List In</h1>
-        </div>
-        <h2>Reset Kata Sandi Anda</h2>
-
-        <?php if (!empty($errors)): ?>
-            <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                <?php foreach ($errors as $error): ?><p><?php echo $error; ?></p><?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-        <?php if ($success_message): ?>
-            <div style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                <p><?php echo $success_message; ?></p>
-                <p class="auth-link" style="margin-top: 10px;"><a href="login.php">Masuk Sekarang</a></p>
-            </div>
-        <?php endif; ?>
-
-        <?php if ($token_valid && !$success_message): ?>
-        <p class="subtitle">Masukkan kata sandi baru Anda di bawah ini.</p>
-        <form id="resetPasswordForm" method="POST" action="reset_password.php?token=<?php echo htmlspecialchars($token); ?>">
-            <div class="form-group">
-                <label for="password">Kata Sandi Baru</label>
-                <input type="password" id="password" name="password" minlength="6" required placeholder="Minimal 6 karakter">
-            </div>
-            <div class="form-group">
-                <label for="confirmPassword">Konfirmasi Kata Sandi Baru</label>
-                <input type="password" id="confirmPassword" name="confirmPassword" minlength="6" required placeholder="Ulangi kata sandi baru">
-            </div>
-            <button type="submit" class="btn-submit">Reset Kata Sandi</button>
-        </form>
-        <?php elseif(!$success_message): ?>
-             <p class="auth-link" style="margin-top: 10px;"><a href="forgot_password.php">Minta tautan baru</a> atau <a href="login.php">Kembali ke Login</a></p>
-        <?php endif; ?>
+<div class="auth-container">
+    <div class="logo-container">
+        <h1>List In</h1>
     </div>
+    <h2>Reset Kata Sandi Anda</h2>
+    <p class="subtitle">Masukkan kata sandi baru untuk akun Anda.</p>
+
+    <?php if (!empty($errors)): ?>
+        <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align:left;">
+            <?php foreach ($errors as $error): ?>
+                <p><?php echo $error; ?></p>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <form id="resetPasswordForm" method="POST" action="reset_password.php?token=<?php echo htmlspecialchars($token); ?>">
+        <div class="form-group">
+            <label for="newPassword">Kata Sandi Baru</label>
+            <input type="password" id="newPassword" name="newPassword" minlength="6" required placeholder="Minimal 6 karakter">
+        </div>
+        <div class="form-group">
+            <label for="confirmNewPassword">Konfirmasi Kata Sandi Baru</label>
+            <input type="password" id="confirmNewPassword" name="confirmNewPassword" minlength="6" required placeholder="Ulangi kata sandi baru">
+        </div>
+        <button type="submit" class="btn-submit">Simpan Kata Sandi Baru</button>
+    </form>
+    <p class="auth-link">Ingat kata sandi? <a href="login.php">Masuk di sini</a></p>
+</div>
 
 <?php require_once 'includes/footer.php'; ?>
 ```
 
-**6.5. `laporan.php` (Halaman Laporan)**
-Ini akan menjadi halaman yang kompleks.
+**`ubah_password.php`** (Penyesuaian, user bisa saja tidak punya password jika dari Google)
 ```php
 <?php
-// laporan.php
-$page_title = "Laporan Produktivitas";
+$page_title = "Ubah Kata Sandi";
 require_once 'includes/header.php';
 require_once 'includes/sidebar.php';
-require_once 'includes/task_helper.php'; // Untuk render_task_card
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -1750,42 +1218,444 @@ if (!isset($_SESSION['user_id'])) {
 }
 $user_id = $_SESSION['user_id'];
 
-// --- Data untuk Chart dan Status (Mirip Dashboard) ---
-$total_tasks_report = 0; $completed_report = 0; $in_progress_report = 0; $not_started_report = 0;
-$report_start_date_val = date('Y-m-d', strtotime('-6 days')); // Default 7 hari terakhir
-$report_end_date_val = date('Y-m-d');
-$filter_date_range_str_report = isset($_GET['reportDateRange']) ? trim($_GET['reportDateRange']) : (date('d/m/Y', strtotime($report_start_date_val)) . ' - ' . date('d/m/Y', strtotime($report_end_date_val)));
+$stmt_user_pass_check = $conn->prepare("SELECT password FROM users WHERE id = ?");
+$stmt_user_pass_check->bind_param("i", $user_id);
+$stmt_user_pass_check->execute();
+$result_user_pass = $stmt_user_pass_check->get_result();
+$user_pass_data = $result_user_pass->fetch_assoc();
+$stmt_user_pass_check->close();
 
-if (isset($_GET['reportDateRange']) && !empty(trim($_GET['reportDateRange']))) {
-    $range_parts = explode(' - ', $_GET['reportDateRange']);
-    if (count($range_parts) >= 1) {
-        $date_start_tmp = DateTime::createFromFormat('d/m/Y', trim($range_parts[0]));
-        if ($date_start_tmp) $report_start_date_val = $date_start_tmp->format('Y-m-d');
+$user_has_password = ($user_pass_data && $user_pass_data['password'] !== null);
 
-        if (count($range_parts) == 2) {
-            $date_end_tmp = DateTime::createFromFormat('d/m/Y', trim($range_parts[1]));
-            if ($date_end_tmp) $report_end_date_val = $date_end_tmp->format('Y-m-d');
-        } else {
-             $report_end_date_val = $report_start_date_val; // Jika hanya 1 tanggal
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $currentPassword = $_POST['currentPassword'] ?? null; // Bisa kosong jika user belum punya password
+    $newPassword = $_POST['newPassword'];
+    $confirmNewPassword = $_POST['confirmNewPassword'];
+    $validation_errors_found = false;
+
+    if ($user_has_password && empty($currentPassword)) {
+        add_notification("Kata sandi saat ini wajib diisi jika Anda sudah memilikinya.", "error");
+        $validation_errors_found = true;
+    }
+    if (empty($newPassword) || empty($confirmNewPassword)) {
+        add_notification("Kata sandi baru dan konfirmasi wajib diisi.", "error");
+        $validation_errors_found = true;
+    }
+    
+    if (!$validation_errors_found) {
+        if ($user_has_password) { // Jika user punya password, verifikasi password lama
+            if (!password_verify($currentPassword, $user_pass_data['password'])) {
+                add_notification("Kata sandi saat ini salah.", "error");
+                $validation_errors_found = true;
+            }
+        }
+        // Lanjutkan validasi password baru
+        if (strlen($newPassword) < 6) {
+            add_notification("Kata sandi baru minimal 6 karakter.", "error");
+            $validation_errors_found = true;
+        } elseif ($newPassword !== $confirmNewPassword) {
+            add_notification("Kata sandi baru dan konfirmasi tidak cocok.", "error");
+            $validation_errors_found = true;
+        }
+            
+        if (!$validation_errors_found) {
+            $hashed_new_password = password_hash($newPassword, PASSWORD_DEFAULT);
+            $stmt_update = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
+            $stmt_update->bind_param("si", $hashed_new_password, $user_id);
+            if ($stmt_update->execute()) {
+                add_notification("Kata sandi berhasil diubah!", "success");
+                // Jika user sebelumnya tidak punya password, mungkin beri notif tambahan
+                if (!$user_has_password) {
+                    add_notification("Anda sekarang dapat masuk menggunakan email dan kata sandi ini.", "info");
+                }
+                header("Location: profil.php");
+                exit();
+            } else {
+                add_notification("Gagal mengubah kata sandi: " . $stmt_update->error, "error");
+            }
+            $stmt_update->close();
         }
     }
 }
-// Pastikan start date tidak lebih besar dari end date
-if (strtotime($report_start_date_val) > strtotime($report_end_date_val)) {
-    list($report_start_date_val, $report_end_date_val) = [$report_end_date_val, $report_start_date_val];
+?>
+<main class="main">
+    <h2 class="page-title">Ubah Kata Sandi Akun</h2>
+
+    <div class="form-container">
+        <?php if (!$user_has_password): ?>
+            <div style="background-color: #e2f3fe; color: #0c5464; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align:left;">
+                Anda saat ini masuk menggunakan akun Google dan belum mengatur kata sandi manual. Mengisi form ini akan membuat kata sandi baru untuk akun Anda.
+            </div>
+        <?php endif; ?>
+
+        <form id="changePasswordForm" method="POST" action="ubah_password.php">
+            <?php if ($user_has_password): ?>
+            <div class="form-group">
+                <label for="currentPassword">Kata Sandi Saat Ini</label>
+                <input type="password" id="currentPassword" name="currentPassword" required placeholder="Masukkan kata sandi Anda saat ini">
+            </div>
+            <?php endif; ?>
+            <div class="form-group">
+                <label for="newPassword">Kata Sandi Baru</label>
+                <input type="password" id="newPassword" name="newPassword" minlength="6" required placeholder="Minimal 6 karakter">
+            </div>
+            <div class="form-group">
+                <label for="confirmNewPassword">Konfirmasi Kata Sandi Baru</label>
+                <input type="password" id="confirmNewPassword" name="confirmNewPassword" minlength="6" required placeholder="Ulangi kata sandi baru">
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Simpan Kata Sandi</button>
+                 <a href="profil.php" class="btn btn-secondary">Batal</a>
+            </div>
+        </form>
+    </div>
+</main>
+<?php require_once 'includes/footer.php'; ?>
+```
+
+**`send_deadline_emails.php` (BARU - Untuk Cron Job)**
+```php
+<?php
+// send_deadline_emails.php
+// Skrip ini HARUS dipanggil oleh cron job, bukan diakses via browser langsung.
+// Untuk keamanan, Anda bisa menambahkan cek IP atau secret key jika perlu.
+
+require_once dirname(__FILE__) . '/includes/db.php'; // Mengandung config.php
+require_once dirname(__FILE__) . '/vendor/autoload.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+// --- Kirim Email untuk Tugas Deadline H-1 ---
+$tomorrow_date = date('Y-m-d', strtotime('+1 day'));
+$today_for_email_check = date('Y-m-d');
+
+$stmt_h1 = $conn->prepare(
+    "SELECT t.id as task_id, t.title as task_title, DATE_FORMAT(t.due_date, '%d %M %Y') as task_due_date_formatted, 
+            u.id as user_id, u.email as user_email, u.username as user_username
+     FROM tasks t
+     JOIN users u ON t.user_id = u.id
+     WHERE t.due_date = ? AND t.status != 'Completed'
+     AND (t.last_deadline_email_sent IS NULL OR DATE(t.last_deadline_email_sent) < ?)"
+);
+if (!$stmt_h1) {
+    error_log("Send Deadline Email (H-1) - Prepare failed: " . $conn->error);
+    // exit(); // Jangan exit jika ada error prepare, lanjutkan ke overdue
+} else {
+    $stmt_h1->bind_param("ss", $tomorrow_date, $today_for_email_check);
+    $stmt_h1->execute();
+    $result_h1 = $stmt_h1->get_result();
+    $tasks_due_tomorrow_by_user = [];
+    while ($row = $result_h1->fetch_assoc()) {
+        $tasks_due_tomorrow_by_user[$row['user_id']]['user_info'] = ['email' => $row['user_email'], 'username' => $row['user_username']];
+        $tasks_due_tomorrow_by_user[$row['user_id']]['tasks'][] = ['id' => $row['task_id'], 'title' => $row['task_title'], 'due_date' => $row['task_due_date_formatted']];
+    }
+    $stmt_h1->close();
+
+    foreach ($tasks_due_tomorrow_by_user as $user_id_h1 => $data_h1) {
+        $user_info_h1 = $data_h1['user_info'];
+        $task_list_html_h1 = "<ul>";
+        $task_ids_to_update_h1 = [];
+        foreach ($data_h1['tasks'] as $task_h1) {
+            $task_list_html_h1 .= "<li><strong>" . htmlspecialchars($task_h1['title']) . "</strong> (Jatuh tempo: " . htmlspecialchars($task_h1['due_date']) . ")</li>";
+            $task_ids_to_update_h1[] = $task_h1['id'];
+        }
+        $task_list_html_h1 .= "</ul>";
+
+        $mail_h1 = new PHPMailer(true);
+        try {
+            $mail_h1->isSMTP(); $mail_h1->Host = MAIL_HOST; $mail_h1->SMTPAuth = true;
+            $mail_h1->Username = MAIL_USERNAME; $mail_h1->Password = MAIL_PASSWORD;
+            $mail_h1->SMTPSecure = MAIL_ENCRYPTION; $mail_h1->Port = MAIL_PORT;
+            $mail_h1->setFrom(MAIL_FROM_ADDRESS, MAIL_FROM_NAME);
+            $mail_h1->addAddress($user_info_h1['email'], $user_info_h1['username']);
+            $mail_h1->isHTML(true);
+            $mail_h1->Subject = 'Pengingat: Tugas Akan Jatuh Tempo Besok - List In';
+            $body_h1 = file_get_contents(dirname(__FILE__) . '/email_templates/deadline_h1_template.html');
+            $body_h1 = str_replace('{{USERNAME}}', htmlspecialchars($user_info_h1['username']), $body_h1);
+            $body_h1 = str_replace('{{TASK_LIST}}', $task_list_html_h1, $body_h1);
+            $body_h1 = str_replace('{{APP_URL}}', APP_URL, $body_h1);
+            $body_h1 = str_replace('{{CURRENT_YEAR}}', date("Y"), $body_h1);
+            $mail_h1->Body = $body_h1;
+            if (defined('APP_LOGO_PATH') && file_exists(APP_LOGO_PATH)) {
+                $mail_h1->addEmbeddedImage(APP_LOGO_PATH, 'logo_listin_email');
+            }
+            $mail_h1->send();
+            echo "Email pengingat H-1 dikirim ke " . $user_info_h1['email'] . "\n";
+
+            // Update last_deadline_email_sent untuk tugas yang sudah dinotifikasi
+            if (!empty($task_ids_to_update_h1)) {
+                $ids_placeholder_h1 = implode(',', array_fill(0, count($task_ids_to_update_h1), '?'));
+                $stmt_update_sent_h1 = $conn->prepare("UPDATE tasks SET last_deadline_email_sent = NOW() WHERE id IN ($ids_placeholder_h1) AND user_id = ?");
+                if ($stmt_update_sent_h1) {
+                    $types_update_h1 = str_repeat('i', count($task_ids_to_update_h1)) . 'i';
+                    $params_update_h1 = array_merge($task_ids_to_update_h1, [$user_id_h1]);
+                    $stmt_update_sent_h1->bind_param($types_update_h1, ...$params_update_h1);
+                    $stmt_update_sent_h1->execute();
+                    $stmt_update_sent_h1->close();
+                }
+            }
+        } catch (Exception $e) {
+            echo "Gagal mengirim email H-1 ke " . $user_info_h1['email'] . ". Mailer Error: {$mail_h1->ErrorInfo}\n";
+            error_log("Send Deadline Email (H-1) - Mailer Error for " . $user_info_h1['email'] . ": " . $mail_h1->ErrorInfo);
+        }
+    }
+}
+
+// --- Kirim Email untuk Tugas Terlewat (Overdue) ---
+$stmt_overdue = $conn->prepare(
+    "SELECT t.id as task_id, t.title as task_title, DATE_FORMAT(t.due_date, '%d %M %Y') as task_due_date_formatted, 
+            u.id as user_id, u.email as user_email, u.username as user_username
+     FROM tasks t
+     JOIN users u ON t.user_id = u.id
+     WHERE t.due_date < CURDATE() AND t.status != 'Completed'
+     AND (t.last_overdue_email_sent IS NULL OR DATE(t.last_overdue_email_sent) < ?)"
+);
+if (!$stmt_overdue) {
+    error_log("Send Deadline Email (Overdue) - Prepare failed: " . $conn->error);
+    // exit();
+} else {
+    $stmt_overdue->bind_param("s", $today_for_email_check);
+    $stmt_overdue->execute();
+    $result_overdue = $stmt_overdue->get_result();
+    $tasks_overdue_by_user = [];
+    while ($row_ov = $result_overdue->fetch_assoc()) {
+        $tasks_overdue_by_user[$row_ov['user_id']]['user_info'] = ['email' => $row_ov['user_email'], 'username' => $row_ov['user_username']];
+        $tasks_overdue_by_user[$row_ov['user_id']]['tasks'][] = ['id' => $row_ov['task_id'], 'title' => $row_ov['task_title'], 'due_date' => $row_ov['task_due_date_formatted']];
+    }
+    $stmt_overdue->close();
+
+    foreach ($tasks_overdue_by_user as $user_id_ov => $data_ov) {
+        $user_info_ov = $data_ov['user_info'];
+        $task_list_html_ov = "<ul>";
+        $task_ids_to_update_ov = [];
+        foreach ($data_ov['tasks'] as $task_ov) {
+            $task_list_html_ov .= "<li><strong>" . htmlspecialchars($task_ov['title']) . "</strong> (Seharusnya selesai pada: " . htmlspecialchars($task_ov['due_date']) . ")</li>";
+            $task_ids_to_update_ov[] = $task_ov['id'];
+        }
+        $task_list_html_ov .= "</ul>";
+
+        $mail_ov = new PHPMailer(true);
+        try {
+            $mail_ov->isSMTP(); $mail_ov->Host = MAIL_HOST; $mail_ov->SMTPAuth = true;
+            $mail_ov->Username = MAIL_USERNAME; $mail_ov->Password = MAIL_PASSWORD;
+            $mail_ov->SMTPSecure = MAIL_ENCRYPTION; $mail_ov->Port = MAIL_PORT;
+            $mail_ov->setFrom(MAIL_FROM_ADDRESS, MAIL_FROM_NAME);
+            $mail_ov->addAddress($user_info_ov['email'], $user_info_ov['username']);
+            $mail_ov->isHTML(true);
+            $mail_ov->Subject = 'Pemberitahuan: Ada Tugas yang Terlewat Batas Waktu - List In';
+
+            $body_ov = file_get_contents(dirname(__FILE__) . '/email_templates/overdue_task_template.html');
+            $body_ov = str_replace('{{USERNAME}}', htmlspecialchars($user_info_ov['username']), $body_ov);
+            $body_ov = str_replace('{{TASK_LIST}}', $task_list_html_ov, $body_ov);
+            $body_ov = str_replace('{{APP_URL}}', APP_URL, $body_ov);
+            $body_ov = str_replace('{{CURRENT_YEAR}}', date("Y"), $body_ov);
+            $mail_ov->Body = $body_ov;
+             if (defined('APP_LOGO_PATH') && file_exists(APP_LOGO_PATH)) {
+                $mail_ov->addEmbeddedImage(APP_LOGO_PATH, 'logo_listin_email');
+            }
+
+            $mail_ov->send();
+            echo "Email pengingat overdue dikirim ke " . $user_info_ov['email'] . "\n";
+
+            // Update last_overdue_email_sent
+            if (!empty($task_ids_to_update_ov)) {
+                $ids_placeholder_ov = implode(',', array_fill(0, count($task_ids_to_update_ov), '?'));
+                $stmt_update_sent_ov = $conn->prepare("UPDATE tasks SET last_overdue_email_sent = NOW() WHERE id IN ($ids_placeholder_ov) AND user_id = ?");
+                if ($stmt_update_sent_ov) {
+                    $types_update_ov = str_repeat('i', count($task_ids_to_update_ov)) . 'i';
+                    $params_update_ov = array_merge($task_ids_to_update_ov, [$user_id_ov]);
+                    $stmt_update_sent_ov->bind_param($types_update_ov, ...$params_update_ov);
+                    $stmt_update_sent_ov->execute();
+                    $stmt_update_sent_ov->close();
+                }
+            }
+        } catch (Exception $e) {
+            echo "Gagal mengirim email overdue ke " . $user_info_ov['email'] . ". Mailer Error: {$mail_ov->ErrorInfo}\n";
+            error_log("Send Deadline Email (Overdue) - Mailer Error for " . $user_info_ov['email'] . ": " . $mail_ov->ErrorInfo);
+        }
+    }
+}
+
+echo "Proses pengiriman email selesai.\n";
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->close();
+}
+?>
+```
+*Buat folder `email_templates` di root proyek dan di dalamnya dua file HTML template:*
+
+**`email_templates/deadline_h1_template.html`**
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pengingat Tugas Jatuh Tempo Besok</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; padding: 20px; background-color: #fff; border: 1px solid #ddd; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        .header img { max-height: 50px; margin-bottom: 10px; }
+        .header h2 { color: #7e47b8; margin: 0; font-size: 1.5em; }
+        .content p { margin-bottom: 15px; }
+        .content ul { list-style-type: disc; margin-left: 20px; padding-left: 0; }
+        .content li { margin-bottom: 8px; }
+        .button-container { text-align: center; margin: 25px 0; }
+        .button { background-color: #7e47b8; color: white !important; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; }
+        .footer { font-size: 0.9em; color: #777; text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; }
+        .footer a { color: #7e47b8; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="cid:logo_listin_email" alt="List In Logo">
+            <h2>Pengingat Tugas Jatuh Tempo</h2>
+        </div>
+        <div class="content">
+            <p>Halo {{USERNAME}},</p>
+            <p>Ini adalah pengingat otomatis dari List In bahwa Anda memiliki beberapa tugas yang akan jatuh tempo besok. Mohon periksa dan selesaikan tugas-tugas berikut:</p>
+            {{TASK_LIST}}
+            <p>Segera selesaikan tugas-tugas ini untuk menjaga produktivitas Anda. Anda dapat melihat detail tugas dan mengelolanya melalui aplikasi List In.</p>
+            <div class="button-container">
+                <a href="{{APP_URL}}/manajemen_tugas.php" class="button">Lihat Tugas Saya</a>
+            </div>
+            <p>Jika Anda telah menyelesaikan tugas ini, Anda dapat mengabaikan email ini atau menandainya sebagai 'Selesai' di aplikasi.</p>
+            <p>Terima kasih atas perhatiannya dan semoga hari Anda produktif!</p>
+            <p>Salam Hormat,<br>Tim List In</p>
+        </div>
+        <div class="footer">
+            <p>Email ini dikirim secara otomatis. Mohon untuk tidak membalas email ini.<br>
+            Kunjungi <a href="{{APP_URL}}">List In</a> untuk informasi lebih lanjut.<br>
+            &copy; {{CURRENT_YEAR}} List In. Hak Cipta Dilindungi.</p>
+        </div>
+    </div>
+</body>
+</html>
+```
+
+**`email_templates/overdue_task_template.html`**
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pemberitahuan Tugas Terlewat Batas Waktu</title>
+     <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; padding: 20px; background-color: #fff; border: 1px solid #ddd; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        .header img { max-height: 50px; margin-bottom: 10px; }
+        .header h2 { color: #d9534f; margin: 0; font-size: 1.5em; } /* Warna merah untuk overdue */
+        .content p { margin-bottom: 15px; }
+        .content ul { list-style-type: disc; margin-left: 20px; padding-left: 0; }
+        .content li { margin-bottom: 8px; }
+        .content strong { color: #c9302c; } /* Penekanan warna merah */
+        .button-container { text-align: center; margin: 25px 0; }
+        .button { background-color: #7e47b8; color: white !important; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; }
+        .footer { font-size: 0.9em; color: #777; text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; }
+        .footer a { color: #7e47b8; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="cid:logo_listin_email" alt="List In Logo">
+            <h2>Pemberitahuan Tugas Terlewat</h2>
+        </div>
+        <div class="content">
+            <p>Halo {{USERNAME}},</p>
+            <p>Sistem kami mendeteksi bahwa Anda memiliki beberapa tugas yang telah <strong>melewati batas waktu penyelesaian</strong>. Mohon segera periksa dan tindak lanjuti tugas-tugas berikut:</p>
+            {{TASK_LIST}}
+            <p>Menyelesaikan tugas yang terlewat penting untuk menjaga alur kerja dan pencapaian target Anda. Silakan akses aplikasi List In untuk memperbarui status atau menjadwalkan ulang tugas-tugas ini.</p>
+            <div class="button-container">
+                <a href="{{APP_URL}}/manajemen_tugas.php" class="button">Kelola Tugas Sekarang</a>
+            </div>
+            <p>Jika ada kendala atau Anda memerlukan bantuan, jangan ragu untuk merujuk pada sumber daya yang tersedia atau menghubungi tim support (jika ada).</p>
+            <p>Terima kasih atas perhatian dan kerjasamanya.</p>
+            <p>Salam Hormat,<br>Tim List In</p>
+        </div>
+        <div class="footer">
+            <p>Email ini dikirim secara otomatis. Mohon untuk tidak membalas email ini.<br>
+            Kunjungi <a href="{{APP_URL}}">List In</a> untuk informasi lebih lanjut.<br>
+            &copy; {{CURRENT_YEAR}} List In. Hak Cipta Dilindungi.</p>
+        </div>
+    </div>
+</body>
+</html>
+```
+
+**`laporan.php` (BARU)**
+```php
+<?php
+$page_title = "Laporan Tugas";
+require_once 'includes/header.php';
+require_once 'includes/sidebar.php';
+require_once 'includes/task_helper.php';
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+$user_id = $_SESSION['user_id'];
+
+// Inisialisasi filter tanggal untuk PDF dan tampilan halaman
+$report_date_range_val = '';
+$report_start_date_sql = null;
+$report_end_date_sql = null;
+
+if (isset($_GET['filterReport'])) {
+    $report_date_range_val = trim($_GET['reportDateRange'] ?? '');
+    if (!empty($report_date_range_val)) {
+        $dates = explode(' - ', $report_date_range_val);
+        if (count($dates) >= 1 && !empty(trim($dates[0]))) {
+            $date_parts_start = explode('/', trim($dates[0]));
+            if (count($date_parts_start) == 3 && checkdate((int)$date_parts_start[1], (int)$date_parts_start[0], (int)$date_parts_start[2])) {
+                $report_start_date_sql = $date_parts_start[2] . '-' . $date_parts_start[1] . '-' . $date_parts_start[0];
+            }
+        }
+        if (count($dates) == 2 && !empty(trim($dates[1]))) {
+            $date_parts_end = explode('/', trim($dates[1]));
+             if (count($date_parts_end) == 3 && checkdate((int)$date_parts_end[1], (int)$date_parts_end[0], (int)$date_parts_end[2])) {
+                $report_end_date_sql = $date_parts_end[2] . '-' . $date_parts_end[1] . '-' . $date_parts_end[0];
+            }
+        } elseif (count($dates) == 1 && $report_start_date_sql) {
+            $report_end_date_sql = $report_start_date_sql; // Jika hanya satu tanggal, rentangnya adalah hari itu
+        }
+        if ($report_start_date_sql && $report_end_date_sql && strtotime($report_start_date_sql) > strtotime($report_end_date_sql)) {
+            list($report_start_date_sql, $report_end_date_sql) = [$report_end_date_sql, $report_start_date_sql];
+        }
+    }
+} else { // Default: 7 hari terakhir
+    $today_for_report = new DateTimeImmutable();
+    $report_end_date_sql = $today_for_report->format('Y-m-d');
+    $report_start_date_sql = $today_for_report->modify('-6 days')->format('Y-m-d');
+    $report_date_range_val = date('d/m/Y', strtotime($report_start_date_sql)) . ' - ' . date('d/m/Y', strtotime($report_end_date_sql));
 }
 
 
-// Query untuk statistik berdasarkan rentang tanggal (misal, tugas yang *jatuh tempo* atau *diselesaikan* dalam rentang ini)
-// Untuk 'Status Tugas Keseluruhan', kita mungkin tetap ingin semua tugas user, atau tugas yang relevan dengan rentang waktu.
-// Mari kita ambil tugas yang 'updated_at' nya dalam rentang waktu untuk status.
-$stmt_stats_report = $conn->prepare(
-    "SELECT status, COUNT(*) as count FROM tasks
-     WHERE user_id = ? AND DATE(updated_at) BETWEEN ? AND ?
-     GROUP BY status"
-);
-if ($stmt_stats_report) {
-    $stmt_stats_report->bind_param("iss", $user_id, $report_start_date_val, $report_end_date_val);
+// Data untuk Progress Circles (menggunakan filter tanggal jika ada)
+$total_tasks_report = 0; $completed_report = 0; $in_progress_report = 0; $not_started_report = 0;
+$sql_stats_report = "SELECT status, COUNT(*) as count FROM tasks WHERE user_id = ?";
+$params_stats_report = [$user_id];
+$types_stats_report = "i";
+
+if ($report_start_date_sql && $report_end_date_sql) {
+    // Filter berdasarkan tanggal pembuatan atau update TUGAS dalam rentang, BUKAN tanggal deadline
+    // Ini mungkin perlu disesuaikan tergantung definisi "laporan dalam rentang waktu"
+    $sql_stats_report .= " AND ( (DATE(created_at) BETWEEN ? AND ?) OR (status = 'Completed' AND DATE(updated_at) BETWEEN ? AND ?) )";
+    $params_stats_report[] = $report_start_date_sql; $params_stats_report[] = $report_end_date_sql;
+    $params_stats_report[] = $report_start_date_sql; $params_stats_report[] = $report_end_date_sql;
+    $types_stats_report .= "ssss";
+}
+$sql_stats_report .= " GROUP BY status";
+
+$stmt_stats_report = $conn->prepare($sql_stats_report);
+if($stmt_stats_report){
+    $stmt_stats_report->bind_param($types_stats_report, ...$params_stats_report);
     $stmt_stats_report->execute();
     $result_stats_report = $stmt_stats_report->get_result();
     while ($row_stat_report = $result_stats_report->fetch_assoc()) {
@@ -1797,44 +1667,49 @@ if ($stmt_stats_report) {
     $stmt_stats_report->close();
 }
 $progress_circles_data_report = [
-    'Selesai'    => ['count' => $completed_report,   'percent' => ($total_tasks_report > 0) ? round(($completed_report / $total_tasks_report) * 100) : 0, 'color' => '#4caf50'],
+    'Selesai' => ['count' => $completed_report, 'percent' => ($total_tasks_report > 0) ? round(($completed_report / $total_tasks_report) * 100) : 0, 'color' => '#4caf50'],
     'Dikerjakan' => ['count' => $in_progress_report, 'percent' => ($total_tasks_report > 0) ? round(($in_progress_report / $total_tasks_report) * 100) : 0, 'color' => '#2196f3'],
-    'Belum Mulai'=> ['count' => $not_started_report, 'percent' => ($total_tasks_report > 0) ? round(($not_started_report / $total_tasks_report) * 100) : 0, 'color' => '#f44336'],
+    'Belum Mulai' => ['count' => $not_started_report, 'percent' => ($total_tasks_report > 0) ? round(($not_started_report / $total_tasks_report) * 100) : 0, 'color' => '#f44336'],
 ];
 
 
-// Data untuk Diagram Performa (Tugas Selesai per Hari dalam Rentang)
+// Data untuk Diagram Performa (menggunakan filter tanggal)
 $line_chart_labels_report = []; $line_chart_data_completed_report = [];
-try {
-    $current_date_loop_obj = new DateTime($report_start_date_val);
-    $end_date_loop_obj = new DateTime($report_end_date_val);
-    $interval_one_day = new DateInterval('P1D');
-    $loop_count = 0;
+if ($report_start_date_sql && $report_end_date_sql) {
+    try {
+        $current_date_loop_obj_report = DateTime::createFromFormat('Y-m-d', $report_start_date_sql);
+        $end_date_loop_obj_report = DateTime::createFromFormat('Y-m-d', $report_end_date_sql);
 
-    while ($current_date_loop_obj <= $end_date_loop_obj) {
-        $date_str_loop = $current_date_loop_obj->format('Y-m-d');
-        $line_chart_labels_report[] = $current_date_loop_obj->format('d M'); // Format untuk label chart
-
-        $stmt_completed_on_date = $conn->prepare("SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND status = 'Completed' AND DATE(updated_at) = ?");
-        $tasks_completed_on_day = 0;
-        if($stmt_completed_on_date) {
-            $stmt_completed_on_date->bind_param("is", $user_id, $date_str_loop);
-            $stmt_completed_on_date->execute();
-            $result_completed_on_date = $stmt_completed_on_date->get_result();
-            if($result_completed_on_date && $row_completed = $result_completed_on_date->fetch_assoc()) {
-                $tasks_completed_on_day = (int)$row_completed['count'];
+        if ($current_date_loop_obj_report && $end_date_loop_obj_report) {
+            $loop_count_report = 0; $interval_one_day_report = new DateInterval('P1D');
+            while ($current_date_loop_obj_report <= $end_date_loop_obj_report) {
+                $date_str_loop_report = $current_date_loop_obj_report->format('Y-m-d');
+                $line_chart_labels_report[] = $current_date_loop_obj_report->format('d M');
+                
+                $stmt_completed_on_date_report = $conn->prepare("SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND status = 'Completed' AND DATE(updated_at) = ?");
+                $tasks_completed_on_day_report = 0;
+                if($stmt_completed_on_date_report) {
+                    $stmt_completed_on_date_report->bind_param("is", $user_id, $date_str_loop_report);
+                    $stmt_completed_on_date_report->execute();
+                    $result_completed_on_date_report = $stmt_completed_on_date_report->get_result();
+                    if($result_completed_on_date_report && $result_completed_on_date_report->num_rows > 0) {
+                        $row_completed_report = $result_completed_on_date_report->fetch_assoc();
+                        $tasks_completed_on_day_report = (int)($row_completed_report['count'] ?? 0);
+                    }
+                    $stmt_completed_on_date_report->close();
+                }
+                $line_chart_data_completed_report[] = $tasks_completed_on_day_report;
+                $current_date_loop_obj_report->add($interval_one_day_report); $loop_count_report++;
+                if ($loop_count_report > 90 ) { // Batasi loop untuk performa
+                    if ($current_date_loop_obj_report <= $end_date_loop_obj_report) {
+                        $line_chart_labels_report[] = "..."; $line_chart_data_completed_report[] = null;
+                    }
+                    break;
+                }
             }
-            $stmt_completed_on_date->close();
         }
-        $line_chart_data_completed_report[] = $tasks_completed_on_day;
-        $current_date_loop_obj->add($interval_one_day);
-        $loop_count++;
-        if ($loop_count > 90 && $current_date_loop_obj <= $end_date_loop_obj) { // Batasi jumlah titik data untuk performa
-             $line_chart_labels_report[] = "..."; $line_chart_data_completed_report[] = null; break;
-        }
-    }
-} catch (Exception $e) { error_log("Laporan (Performa): Exception: " . $e->getMessage()); }
-
+    } catch (Exception $e) { error_log("Laporan (Performa): Exception: " . $e->getMessage()); }
+}
 if (empty($line_chart_labels_report)) $line_chart_labels_report = ['Tidak Ada Data'];
 if (empty($line_chart_data_completed_report)) $line_chart_data_completed_report = [0];
 
@@ -1847,62 +1722,36 @@ $performance_chart_data_report = [
     ]]
 ];
 
-// Data untuk Kalender Tugas
-$tasks_for_calendar = [];
-$stmt_calendar_tasks = $conn->prepare("SELECT id, title, status, due_date FROM tasks WHERE user_id = ? AND due_date IS NOT NULL AND ( (status != 'Completed' AND due_date >= ?) OR (status = 'Completed' AND DATE(updated_at) >= ? ) )");
-$min_date_for_calendar_query = date('Y-m-d', strtotime('-3 months')); // Ambil tugas 3 bulan ke belakang dan masa depan
-if ($stmt_calendar_tasks) {
-    $stmt_calendar_tasks->bind_param("iss", $user_id, $min_date_for_calendar_query, $min_date_for_calendar_query);
-    $stmt_calendar_tasks->execute();
-    $result_calendar = $stmt_calendar_tasks->get_result();
-    while ($task_cal = $result_calendar->fetch_assoc()) {
-        $date_key = $task_cal['due_date'];
-        if ($task_cal['status'] === 'Completed' && !empty($task_cal['updated_at'])) {
-            $date_key = date('Y-m-d', strtotime($task_cal['updated_at'])); // Gunakan tanggal selesai jika sudah completed
-        }
-        if (!isset($tasks_for_calendar[$date_key])) {
-            $tasks_for_calendar[$date_key] = [];
-        }
-        $tasks_for_calendar[$date_key][] = $task_cal;
-    }
-    $stmt_calendar_tasks->close();
-}
-
 ?>
-<?php //require_once 'includes/header.php'; // sudah di atas ?>
-
 <main class="main">
-    <h2 class="page-title">Laporan Produktivitas</h2>
-    <?php
-        if (isset($_SESSION['notification_messages']) && !empty($_SESSION['notification_messages'])) {
-            // ... (kode display notifikasi seperti di profil.php) ...
-            foreach ($_SESSION['notification_messages'] as $key => $notif) {
-                $alert_type = $notif['type'] === 'success' ? 'success' : ($notif['type'] === 'error' ? 'danger' : 'info');
-                echo "<div class='alert alert-{$alert_type}' role='alert' style='margin-bottom:15px; padding:10px; border-radius:5px; background-color:" . ($alert_type == 'success' ? '#d4edda; color:#155724;' : ($alert_type == 'danger' ? '#f8d7da; color:#721c24;' : '#cce5ff; color:#004085;')) . "'>{$notif['message']}</div>";
-            }
-            unset($_SESSION['notification_messages']);
-            unset($_SESSION['has_unread_notifications_badge']);
-        }
-    ?>
-    <div class="filters-container" style="margin-bottom: 20px;">
-        <form method="GET" action="laporan.php" style="display: flex; gap: 15px; align-items: flex-end; width:100%;">
-            <div class="form-group" style="flex-grow: 1;">
-                <label for="reportDateRange">Pilih Rentang Tanggal Laporan</label>
-                <input type="text" id="reportDateRange" name="reportDateRange" placeholder="Pilih Rentang Tanggal"
-                       value="<?php echo htmlspecialchars($filter_date_range_str_report); ?>">
-            </div>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Terapkan Filter</button>
-            <a href="generate_report_pdf.php?start_date=<?php echo urlencode($report_start_date_val); ?>&end_date=<?php echo urlencode($report_end_date_val); ?>"
-               class="btn btn-secondary" target="_blank"><i class="fas fa-file-pdf"></i> Unduh PDF</a>
+    <div class="page-title-container" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #dfe3e8;">
+        <h2 class="page-title" style="margin-bottom:0; border-bottom:none;">Laporan Tugas</h2>
+        <form method="GET" action="generate_pdf_report.php" target="_blank" style="display: inline-block;">
+             <?php if ($report_start_date_sql && $report_end_date_sql): ?>
+                <input type="hidden" name="start_date" value="<?php echo htmlspecialchars($report_start_date_sql); ?>">
+                <input type="hidden" name="end_date" value="<?php echo htmlspecialchars($report_end_date_sql); ?>">
+             <?php endif; ?>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Unduh Laporan PDF</button>
         </form>
     </div>
 
-    <div class="dashboard-grid" style="height: auto;"> <!-- Re-use dashboard grid for layout -->
-        <div class="dashboard-left-column">
+    <div class="filters-container" style="margin-bottom: 20px;">
+        <form method="GET" action="laporan.php" style="display: flex; gap: 15px; align-items: flex-end; width:100%;">
+            <div class="form-group" style="flex-grow:1;">
+                <label for="reportDateRange">Pilih Rentang Waktu Laporan</label>
+                <input type="text" id="reportDateRange" name="reportDateRange" placeholder="Pilih rentang tanggal..." value="<?php echo htmlspecialchars($report_date_range_val); ?>">
+            </div>
+            <button type="submit" name="filterReport" value="1" class="btn btn-primary">Tampilkan Laporan</button>
+            <a href="laporan.php" class="btn btn-secondary">Reset Filter</a>
+        </form>
+    </div>
+
+    <div class="dashboard-grid" style="height: auto;"> <!-- Adaptasi dari dashboard grid -->
+        <div class="dashboard-left-column"> <!-- Kolom untuk Status & Performa -->
             <section class="widget">
-                <h3>Status Tugas (Rentang: <?php echo date('d M Y', strtotime($report_start_date_val)) . " - " . date('d M Y', strtotime($report_end_date_val)); ?>)</h3>
-                <div class="widget-content-area status-progress-container" style="padding-top:15px;">
-                     <?php if ($total_tasks_report > 0): ?>
+                <h3>Status Tugas (Rentang Dipilih)</h3><br>
+                <div class="widget-content-area status-progress-container">
+                    <?php if ($total_tasks_report > 0): ?>
                         <?php foreach ($progress_circles_data_report as $label => $data): ?>
                         <div class="progress-item">
                             <div class="progress-circle"
@@ -1913,13 +1762,13 @@ if ($stmt_calendar_tasks) {
                         </div>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <p class="no-tasks-message" style="text-align:center; width:100%;">Tidak ada data tugas untuk status pada rentang ini.</p>
+                        <p class="no-tasks-message" style="text-align:center; width:100%;">Tidak ada data tugas pada rentang ini.</p>
                     <?php endif; ?>
                 </div>
             </section>
 
-            <section class="widget">
-                <h3>Performa Pengerjaan (Rentang: <?php echo date('d M Y', strtotime($report_start_date_val)) . " - " . date('d M Y', strtotime($report_end_date_val)); ?>)</h3>
+            <section class="widget" style="margin-top:15px;">
+                <h3>Performa Pengerjaan (Rentang Dipilih)</h3>
                 <div class="widget-content-area chart-container">
                      <?php
                      $has_valid_line_chart_data_report = false;
@@ -1927,28 +1776,29 @@ if ($stmt_calendar_tasks) {
                          $filtered_data_report = array_filter($performance_chart_data_report['datasets'][0]['data'], function($x) { return $x !== null && $x >=0; });
                          $has_valid_line_chart_data_report = !empty($filtered_data_report);
                      }
-                     if ($has_valid_line_chart_data_report):
+                     $has_valid_labels_report = !empty($performance_chart_data_report['labels']) && !in_array("Tidak Ada Data", $performance_chart_data_report['labels']);
+
+                     if ($has_valid_line_chart_data_report && $has_valid_labels_report):
                      ?>
-                    <canvas id="reportPerformanceLineChart"></canvas>
+                        <canvas id="reportPerformanceLineChart"></canvas>
                     <?php else: ?>
-                         <p class="no-tasks-message" style="text-align:center; padding-top:20px;">Tidak ada data tugas selesai untuk chart performa pada rentang ini.</p>
+                        <p class="no-tasks-message" style="text-align:center; padding-top:20px;">Tidak ada data tugas selesai untuk ditampilkan pada rentang waktu ini.</p>
                     <?php endif; ?>
                 </div>
             </section>
         </div>
 
-        <div class="dashboard-right-column">
+        <div class="dashboard-right-column"> <!-- Kolom untuk Kalender & Detail Tugas -->
             <section class="widget" style="height:100%;">
-                <h3>Kalender Tugas & Aktivitas</h3>
-                <div style="display: flex; gap: 15px; height: calc(100% - 40px); /* Adjust for h3 */">
-                    <div id="reportCalendarContainer" style="flex: 1; min-width: 280px;">
-                        <!-- Kalender akan di-render di sini oleh Flatpickr -->
+                <h3>Kalender Tugas (Deadline)</h3>
+                <div class="report-calendar-area" style="display: flex; flex-direction: column; height: 100%;">
+                    <div id="reportCalendarContainer" style="margin-bottom: 15px;">
+                        <!-- Kalender akan diinisialisasi oleh Flatpickr di sini -->
                     </div>
-                    <div id="reportTasksOnSelectedDate" style="flex: 1; overflow-y: auto; border-left: 1px solid #eee; padding-left: 15px;">
-                        <h4 id="selectedDateTitle" style="margin-top:0; margin-bottom:10px; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom:5px;">Pilih tanggal pada kalender</h4>
-                        <div id="tasksListForDate">
-                            <p class="no-tasks-message">Tidak ada tugas untuk tanggal yang dipilih.</p>
-                        </div>
+                    <h4 id="selectedDateTitle" style="margin-bottom: 10px; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">Tugas untuk Tanggal: -</h4>
+                    <div id="tasksForSelectedDate" class="widget-content-area" style="flex-grow:1; overflow-y:auto; padding-right:5px;">
+                        <p class="no-tasks-message">Pilih tanggal pada kalender untuk melihat tugas.</p>
+                        <!-- Tugas akan dimuat di sini oleh JavaScript -->
                     </div>
                 </div>
             </section>
@@ -1958,6 +1808,7 @@ if ($stmt_calendar_tasks) {
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    // Chart untuk laporan
     const reportLineCtx = document.getElementById('reportPerformanceLineChart');
     if (reportLineCtx && typeof Chart !== 'undefined') {
         const reportPerformanceData = <?php echo json_encode($performance_chart_data_report); ?>;
@@ -1965,13 +1816,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (reportPerformanceData && reportPerformanceData.labels && Array.isArray(reportPerformanceData.labels) &&
             reportPerformanceData.datasets && Array.isArray(reportPerformanceData.datasets) && reportPerformanceData.datasets.length > 0 &&
             reportPerformanceData.datasets[0].data && Array.isArray(reportPerformanceData.datasets[0].data) ) {
-
+            
             let validLabelsExistReport = reportPerformanceData.labels.some(l => l !== 'Error' && l !== 'Tidak Ada Data' && l !== '...');
             let numericDataExistsReport = reportPerformanceData.datasets[0].data.some(d => typeof d === 'number' && d >= 0);
             hasValidReportLineData = validLabelsExistReport && numericDataExistsReport;
         }
 
-        if (hasValidReportLineData) {
+        if(hasValidReportLineData){
             new Chart(reportLineCtx, {
                 type: 'line', data: reportPerformanceData,
                 options: { responsive: true, maintainAspectRatio: false,
@@ -1982,58 +1833,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Kalender Tugas di Halaman Laporan
-    const tasksForCalendarJS = <?php echo json_encode($tasks_for_calendar); ?>;
-    const reportCalendarContainer = document.getElementById('reportCalendarContainer');
-    const tasksListForDateDiv = document.getElementById('tasksListForDate');
-    const selectedDateTitleH4 = document.getElementById('selectedDateTitle');
+    // Kalender di halaman laporan
+    const reportCalendarEl = document.getElementById('reportCalendarContainer');
+    const tasksForSelectedDateEl = document.getElementById('tasksForSelectedDate');
+    const selectedDateTitleEl = document.getElementById('selectedDateTitle');
 
-    if (reportCalendarContainer && tasksListForDateDiv && selectedDateTitleH4) {
-        flatpickr(reportCalendarContainer, {
+    if (reportCalendarEl && tasksForSelectedDateEl && selectedDateTitleEl) {
+        flatpickr(reportCalendarEl, {
             inline: true,
-            dateFormat: "Y-m-d", // Sesuai format key di tasksForCalendarJS
+            dateFormat: "Y-m-d", // Format untuk AJAX
             locale: "id",
-            // defaultDate: "today", // Bisa set default ke hari ini
             onChange: function(selectedDates, dateStr, instance) {
                 if (selectedDates.length > 0) {
-                    const selectedDate = dateStr; // dateStr sudah dalam format Y-m-d
-                    selectedDateTitleH4.textContent = "Tugas pada " + instance.formatDate(selectedDates[0], "d M Y");
-                    tasksListForDateDiv.innerHTML = ''; // Kosongkan list
+                    const selectedDate = dateStr;
+                    const displayDate = instance.formatDate(selectedDates[0], "d F Y");
+                    selectedDateTitleEl.textContent = "Tugas untuk Tanggal: " + displayDate;
+                    tasksForSelectedDateEl.innerHTML = '<p class="no-tasks-message">Memuat tugas...</p>';
+                    
+                    fetch(`ajax_get_tasks_for_date.php?date=${selectedDate}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            tasksForSelectedDateEl.innerHTML = ''; // Kosongkan dulu
+                            if (data.success && data.tasks.length > 0) {
+                                data.tasks.forEach(task => {
+                                    // Membuat card mirip dengan task_helper.php tapi di JS
+                                    // Ini bisa disederhanakan atau memanggil fungsi render_task_card versi JS jika ada
+                                    const card = document.createElement('div');
+                                    card.className = 'task-item-card status-' + task.status.toLowerCase().replace(/ /g, '-');
+                                    
+                                    let priorityClass = 'priority-' + (task.priority ? task.priority.toLowerCase() : 'medium');
+                                    let statusText = task.status_display || task.status;
 
-                    if (tasksForCalendarJS[selectedDate] && tasksForCalendarJS[selectedDate].length > 0) {
-                        tasksForCalendarJS[selectedDate].forEach(task => {
-                            // Buat card task sederhana (bisa pakai fungsi render_task_card jika mau lebih kompleks)
-                            const taskDiv = document.createElement('div');
-                            taskDiv.className = 'task-item-card status-' + task.status.toLowerCase().replace(' ', '-');
-                            taskDiv.style.fontSize = '0.8rem';
-                            taskDiv.style.padding = '8px';
-
-                            let statusText = task.status;
-                            if (task.status === 'Not Started') statusText = 'Belum Mulai';
-                            else if (task.status === 'In Progress') statusText = 'Dikerjakan';
-
-                            taskDiv.innerHTML = `
-                                <div class="task-details" style="margin-right:0;">
-                                    <strong>${task.title}</strong>
-                                    <p class="meta-info" style="font-size:0.7rem;">Status: ${statusText}</p>
-                                </div>`;
-                            tasksListForDateDiv.appendChild(taskDiv);
+                                    card.innerHTML = `
+                                        <div class="task-details">
+                                            <strong>${task.title || 'Tanpa Judul'}</strong>
+                                            <p class="description">${task.description || 'Tidak ada deskripsi.'}</p>
+                                            <p class="meta-info">
+                                                Prioritas: <span class="${priorityClass}">${task.priority || 'Medium'}</span> | 
+                                                Status: <span class="task-status-text">${statusText}</span> | 
+                                                Deadline: ${task.due_date_formatted || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div class="task-actions">
+                                            <a href="edit_tugas.php?id=${task.id}&from=laporan.php" class="edit-btn" title="Edit Tugas"><i class="fas fa-edit"></i></a>
+                                        </div>
+                                    `;
+                                    tasksForSelectedDateEl.appendChild(card);
+                                });
+                            } else if (data.success && data.tasks.length === 0) {
+                                tasksForSelectedDateEl.innerHTML = '<p class="no-tasks-message">Tidak ada tugas dengan deadline pada tanggal ini.</p>';
+                            } else {
+                                tasksForSelectedDateEl.innerHTML = `<p class="no-tasks-message">Gagal memuat tugas: ${data.message || 'Error tidak diketahui.'}</p>`;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching tasks for date:', error);
+                            tasksForSelectedDateEl.innerHTML = '<p class="no-tasks-message">Terjadi kesalahan saat mengambil data tugas.</p>';
                         });
-                    } else {
-                        tasksListForDateDiv.innerHTML = '<p class="no-tasks-message">Tidak ada tugas untuk tanggal ini.</p>';
-                    }
-                }
-            },
-            onDayCreate: function(dObj, dStr, fp, dayElem){
-                // Tambahkan dot jika ada tugas pada hari itu
-                const dateKey = fp.formatDate(dayElem.dateObj, "Y-m-d");
-                if (tasksForCalendarJS[dateKey] && tasksForCalendarJS[dateKey].length > 0) {
-                    let dot = document.createElement('span');
-                    dot.className = 'event-dot';
-                    dot.style.cssText = `
-                        height: 6px; width: 6px; background-color: #7e47b8; border-radius: 50%;
-                        display: block; margin: 1px auto 0;`;
-                    dayElem.appendChild(dot);
                 }
             }
         });
@@ -2042,456 +1898,471 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <?php require_once 'includes/footer.php'; ?>
 ```
-Tambahkan CSS untuk event dot di `style.css`:
-```css
-/* style.css - tambahkan di akhir */
-.flatpickr-day .event-dot {
-    /* Styling sudah inline di JS, tapi bisa juga di sini */
-}
-html.dark-theme-active .flatpickr-day .event-dot {
-    background-color: #bb86fc; /* Warna dot untuk tema gelap */
-}
-```
 
-**6.6. `generate_report_pdf.php` (Untuk Unduh PDF)**
+**`ajax_get_tasks_for_date.php` (BARU)**
 ```php
 <?php
-// generate_report_pdf.php
-require_once 'includes/config.php'; // Untuk autoload TCPDF
 require_once 'includes/db.php';
 
+header('Content-Type: application/json');
+
 if (!isset($_SESSION['user_id'])) {
-    // Sebaiknya ada cara untuk memvalidasi akses ke laporan ini,
-    // mungkin token atau session check yang lebih ketat.
-    // Untuk sekarang, asumsikan hanya user login yang bisa akses via link.
+    echo json_encode(['success' => false, 'message' => 'User not authenticated.']);
+    exit();
+}
+$user_id = $_SESSION['user_id'];
+$selected_date = $_GET['date'] ?? null;
+
+if (!$selected_date || !DateTime::createFromFormat('Y-m-d', $selected_date)) {
+    echo json_encode(['success' => false, 'message' => 'Format tanggal tidak valid.']);
+    exit();
+}
+
+$tasks = [];
+$stmt = $conn->prepare("SELECT id, title, description, priority, status, DATE_FORMAT(due_date, '%d/%m/%Y') as due_date_formatted 
+                        FROM tasks 
+                        WHERE user_id = ? AND due_date = ? 
+                        ORDER BY CASE priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Low' THEN 3 ELSE 4 END, created_at ASC");
+
+if ($stmt) {
+    $stmt->bind_param("is", $user_id, $selected_date);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $status_map = [
+        'Not Started' => 'Belum Mulai',
+        'In Progress' => 'Dikerjakan',
+        'Completed' => 'Selesai'
+    ];
+    while ($row = $result->fetch_assoc()) {
+        $row['status_display'] = $status_map[$row['status']] ?? $row['status'];
+        $tasks[] = $row;
+    }
+    $stmt->close();
+    echo json_encode(['success' => true, 'tasks' => $tasks]);
+} else {
+    echo json_encode(['success' => false, 'message' => 'Gagal mempersiapkan query: ' . $conn->error]);
+}
+
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->close();
+}
+?>
+```
+
+**`generate_pdf_report.php` (BARU)**
+```php
+<?php
+require_once 'includes/db.php'; // Untuk session_start(), $conn, config
+require_once 'vendor/autoload.php'; // Untuk TCPDF
+
+if (!isset($_SESSION['user_id'])) {
+    // Seharusnya tidak bisa diakses tanpa login, tapi sebagai pengaman
     die("Akses ditolak. Silakan login terlebih dahulu.");
 }
 $user_id = $_SESSION['user_id'];
+$username = $_SESSION['username'] ?? 'Pengguna';
 
-$start_date_str = $_GET['start_date'] ?? date('Y-m-d', strtotime('-6 days'));
-$end_date_str = $_GET['end_date'] ?? date('Y-m-d');
+$start_date_filter = $_GET['start_date'] ?? null;
+$end_date_filter = $_GET['end_date'] ?? null;
 
-// Validasi tanggal
-$start_date_obj = DateTime::createFromFormat('Y-m-d', $start_date_str);
-$end_date_obj = DateTime::createFromFormat('Y-m-d', $end_date_str);
+$date_range_text = "Semua Waktu";
+$sql_conditions = ["user_id = ?"];
+$params = [$user_id];
+$types = "i";
 
-if (!$start_date_obj || !$end_date_obj || $start_date_obj->format('Y-m-d') !== $start_date_str || $end_date_obj->format('Y-m-d') !== $end_date_str) {
-    die("Format tanggal tidak valid.");
+if ($start_date_filter && $end_date_filter) {
+    // Asumsi format YYYY-MM-DD dari GET request
+    $sql_conditions[] = "((DATE(created_at) BETWEEN ? AND ?) OR (status = 'Completed' AND DATE(updated_at) BETWEEN ? AND ?))";
+    $params[] = $start_date_filter; $params[] = $end_date_filter;
+    $params[] = $start_date_filter; $params[] = $end_date_filter;
+    $types .= "ssss";
+    try {
+        $start_dt = new DateTime($start_date_filter);
+        $end_dt = new DateTime($end_date_filter);
+        $date_range_text = $start_dt->format('d M Y') . " - " . $end_dt->format('d M Y');
+    } catch (Exception $e) { $date_range_text = "Rentang Tidak Valid"; }
+
+} elseif ($start_date_filter) { // Hanya tanggal mulai (satu hari)
+    $sql_conditions[] = "((DATE(created_at) = ?) OR (status = 'Completed' AND DATE(updated_at) = ?))";
+    $params[] = $start_date_filter; $params[] = $start_date_filter;
+    $types .= "ss";
+    try {
+        $start_dt = new DateTime($start_date_filter);
+        $date_range_text = $start_dt->format('d M Y');
+    } catch (Exception $e) { $date_range_text = "Tanggal Tidak Valid"; }
 }
-if ($start_date_obj > $end_date_obj) {
-    list($start_date_obj, $end_date_obj) = [$end_date_obj, $start_date_obj]; // Swap
-    $start_date_str = $start_date_obj->format('Y-m-d');
-    $end_date_str = $end_date_obj->format('Y-m-d');
+
+$sql_where = implode(" AND ", $sql_conditions);
+$sql_tasks = "SELECT title, description, priority, status, DATE_FORMAT(due_date, '%d/%m/%Y') as due_date_f, DATE_FORMAT(created_at, '%d/%m/%Y') as created_at_f, DATE_FORMAT(updated_at, '%d/%m/%Y') as updated_at_f FROM tasks WHERE $sql_where ORDER BY created_at DESC";
+
+$stmt_tasks = $conn->prepare($sql_tasks);
+$tasks_for_pdf = [];
+if ($stmt_tasks) {
+    $stmt_tasks->bind_param($types, ...$params);
+    $stmt_tasks->execute();
+    $result = $stmt_tasks->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $tasks_for_pdf[] = $row;
+    }
+    $stmt_tasks->close();
 }
 
-$user_info_stmt = $conn->prepare("SELECT username, email FROM users WHERE id = ?");
-$user_info_stmt->bind_param("i", $user_id);
-$user_info_stmt->execute();
-$user_result = $user_info_stmt->get_result();
-$user_data = $user_result->fetch_assoc();
-$user_info_stmt->close();
+// Statistik
+$total_count = 0; $completed_count = 0; $inprogress_count = 0; $notstarted_count = 0;
+$sql_stats = "SELECT status, COUNT(*) as count FROM tasks WHERE $sql_where GROUP BY status";
+$stmt_stats = $conn->prepare($sql_stats);
+if($stmt_stats){
+    $stmt_stats->bind_param($types, ...$params);
+    $stmt_stats->execute();
+    $res_stats = $stmt_stats->get_result();
+    while($r_stat = $res_stats->fetch_assoc()){
+        $total_count += (int)$r_stat['count'];
+        if($r_stat['status'] == 'Completed') $completed_count = (int)$r_stat['count'];
+        if($r_stat['status'] == 'In Progress') $inprogress_count = (int)$r_stat['count'];
+        if($r_stat['status'] == 'Not Started') $notstarted_count = (int)$r_stat['count'];
+    }
+    $stmt_stats->close();
+}
 
-if (!$user_data) die("User tidak ditemukan.");
-
-
-// Ambil data tugas dalam rentang
-$tasks_completed = [];
-$tasks_in_progress = [];
-$tasks_not_started = [];
-$tasks_overdue = [];
-
-// Selesai dalam rentang
-$stmt_completed = $conn->prepare("SELECT title, DATE_FORMAT(updated_at, '%d %M %Y') as completed_date, priority FROM tasks WHERE user_id = ? AND status = 'Completed' AND DATE(updated_at) BETWEEN ? AND ? ORDER BY updated_at DESC");
-$stmt_completed->bind_param("iss", $user_id, $start_date_str, $end_date_str);
-$stmt_completed->execute();
-$res_completed = $stmt_completed->get_result();
-while($row = $res_completed->fetch_assoc()) $tasks_completed[] = $row;
-$stmt_completed->close();
-
-// Masih dikerjakan (due date dalam rentang atau sebelum rentang tapi belum selesai)
-$stmt_in_progress = $conn->prepare("SELECT title, DATE_FORMAT(due_date, '%d %M %Y') as due_date_f, priority FROM tasks WHERE user_id = ? AND status = 'In Progress' AND due_date <= ? ORDER BY due_date ASC");
-$stmt_in_progress->bind_param("is", $user_id, $end_date_str);
-$stmt_in_progress->execute();
-$res_in_progress = $stmt_in_progress->get_result();
-while($row = $res_in_progress->fetch_assoc()) $tasks_in_progress[] = $row;
-$stmt_in_progress->close();
-
-// Belum dimulai (due date dalam rentang)
-$stmt_not_started = $conn->prepare("SELECT title, DATE_FORMAT(due_date, '%d %M %Y') as due_date_f, priority FROM tasks WHERE user_id = ? AND status = 'Not Started' AND due_date BETWEEN ? AND ? ORDER BY due_date ASC");
-$stmt_not_started->bind_param("iss", $user_id, $start_date_str, $end_date_str);
-$stmt_not_started->execute();
-$res_not_started = $stmt_not_started->get_result();
-while($row = $res_not_started->fetch_assoc()) $tasks_not_started[] = $row;
-$stmt_not_started->close();
-
-// Terlewat (due date sebelum akhir rentang dan belum selesai)
-$stmt_overdue = $conn->prepare("SELECT title, DATE_FORMAT(due_date, '%d %M %Y') as due_date_f, priority FROM tasks WHERE user_id = ? AND status != 'Completed' AND due_date < ? AND due_date < CURDATE() ORDER BY due_date ASC");
-$stmt_overdue->bind_param("is", $user_id, $end_date_str); // Ambil yang terlewat hingga akhir rentang
-$stmt_overdue->execute();
-$res_overdue = $stmt_overdue->get_result();
-while($row = $res_overdue->fetch_assoc()) $tasks_overdue[] = $row;
-$stmt_overdue->close();
-
-
-// Buat PDF
-class MyTCPDF extends TCPDF {
+// Buat instance PDF baru (TCPDF)
+class MYPDF extends TCPDF {
     public function Header() {
-        $this->SetFont('helvetica', 'B', 16);
+        if (defined('APP_LOGO_PATH') && file_exists(APP_LOGO_PATH)) {
+            $this->Image(APP_LOGO_PATH, 10, 10, 25, '', 'PNG', '', 'T', false, 300, '', false, false, 0, false, false, false);
+        }
+        $this->SetFont('helvetica', 'B', 18);
         $this->SetTextColor(126, 71, 184); // Warna ungu ListIn
-        $this->Cell(0, 15, 'List In - Laporan Produktivitas', 0, false, 'C', 0, '', 0, false, 'M', 'M');
+        $this->Cell(0, 15, 'List In - Laporan Tugas', 0, false, 'C', 0, '', 0, false, 'M', 'M');
         $this->Ln(5);
         $this->SetFont('helvetica', '', 10);
-        $this->SetTextColor(0,0,0);
-        $this->Cell(0, 10, 'Tanggal Cetak: ' . date('d M Y H:i'), 0, false, 'R');
-        $this->Line(15, 25, $this->getPageWidth()-15, 25); // Garis bawah header
+        $this->SetTextColor(0,0,0); // Reset warna teks
+        $this->Cell(0, 10, 'Dihasilkan oleh Sistem Manajemen Tugas List In', 0, false, 'C');
+        $this->Ln(5);
+        $this->Line(10, 30, $this->getPageWidth()-10, 30); // Garis bawah header
     }
 
     public function Footer() {
         $this->SetY(-15);
         $this->SetFont('helvetica', 'I', 8);
-        $this->Cell(0, 10, 'Halaman ' . $this->getAliasNumPage() . '/' . $this->getAliasNbPages() . ' | Generated by List In', 0, false, 'C', 0, '', 0, false, 'T', 'M');
+        $this->Cell(0, 10, 'Halaman '.$this->getAliasNumPage().' dari '.$this->getAliasNbPages() . ' | List In Report &copy; ' . date('Y'), 0, false, 'C', 0, '', 0, false, 'T', 'M');
     }
 }
 
-$pdf = new MyTCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
+$pdf = new MYPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
 
+// Set informasi dokumen
 $pdf->SetCreator(PDF_CREATOR);
 $pdf->SetAuthor('List In Application');
-$pdf->SetTitle('Laporan Produktivitas List In');
-$pdf->SetSubject('Laporan Produktivitas Pengguna');
+$pdf->SetTitle('Laporan Tugas - List In');
+$pdf->SetSubject('Laporan Detail Tugas Produktivitas');
+$pdf->SetKeywords('List In, Tugas, Laporan, Produktivitas');
 
-$pdf->SetHeaderData("", 0, "", "", array(0,0,0), array(255,255,255)); // Hapus header default
-$pdf->setFooterData(array(0,0,0), array(255,255,255));
-
-$pdf->SetMargins(15, 28, 15); // Left, Top (setelah header), Right
-$pdf->SetHeaderMargin(10);
+// Set header dan footer
+$pdf->setHeaderFont(Array(PDF_FONT_NAME_MAIN, '', PDF_FONT_SIZE_MAIN));
+$pdf->setFooterFont(Array(PDF_FONT_NAME_DATA, '', PDF_FONT_SIZE_DATA));
+$pdf->SetDefaultMonospacedFont(PDF_FONT_MONOSPACED);
+$pdf->SetMargins(PDF_MARGIN_LEFT, 35, PDF_MARGIN_RIGHT); // Top margin 35mm
+$pdf->SetHeaderMargin(PDF_MARGIN_HEADER);
 $pdf->SetFooterMargin(PDF_MARGIN_FOOTER);
-
 $pdf->SetAutoPageBreak(TRUE, PDF_MARGIN_BOTTOM);
 $pdf->setImageScale(PDF_IMAGE_SCALE_RATIO);
+if (@file_exists(dirname(__FILE__).'/vendor/tecnickcom/tcpdf/examples/lang/ind.php')) {
+    require_once(dirname(__FILE__).'/vendor/tecnickcom/tcpdf/examples/lang/ind.php');
+    $pdf->setLanguageArray($l);
+}
 $pdf->SetFont('helvetica', '', 10);
 $pdf->AddPage();
 
-// Konten Laporan
-$html = '<style>
-            h1 { font-size: 18px; color: #7e47b8; text-align:center; margin-bottom: 5px;}
-            h2 { font-size: 14px; color: #333; margin-top: 15px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px;}
-            p { margin-bottom: 5px; line-height: 1.4;}
-            table { width: 100%; border-collapse: collapse; margin-bottom:15px; }
-            th { background-color: #f0f3f7; border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: left;}
-            td { border: 1px solid #ddd; padding: 6px; }
-            .no-data { color: #777; font-style: italic; }
-         </style>';
+// Judul Konten Laporan
+$pdf->SetFont('helvetica', 'B', 14);
+$pdf->Cell(0, 10, 'Ringkasan Laporan Tugas', 0, 1, 'L');
+$pdf->SetFont('helvetica', '', 10);
+$pdf->Cell(0, 6, 'Pengguna: ' . htmlspecialchars($username), 0, 1, 'L');
+$pdf->Cell(0, 6, 'Rentang Waktu: ' . htmlspecialchars($date_range_text), 0, 1, 'L');
+$pdf->Cell(0, 6, 'Tanggal Laporan: ' . date('d F Y, H:i:s'), 0, 1, 'L');
+$pdf->Ln(5);
 
-$html .= '<h1>Laporan Produktivitas Pengguna</h1>';
-$html .= '<p><strong>Pengguna:</strong> ' . htmlspecialchars($user_data['username']) . ' (' . htmlspecialchars($user_data['email']) . ')</p>';
-$html .= '<p><strong>Periode Laporan:</strong> ' . date('d M Y', strtotime($start_date_str)) . ' - ' . date('d M Y', strtotime($end_date_str)) . '</p>';
+// Statistik Ringkas
+$pdf->SetFont('helvetica', 'B', 11);
+$pdf->Cell(0, 8, 'Statistik Tugas:', 0, 1, 'L');
+$pdf->SetFont('helvetica', '', 10);
+$html_stats = '<table border="0" cellpadding="4">
+    <tr><td width="150">Total Tugas dalam Rentang</td><td width="10">:</td><td>' . $total_count . '</td></tr>
+    <tr><td>Tugas Selesai</td><td>:</td><td>' . $completed_count . ' (' . ($total_count > 0 ? round(($completed_count/$total_count)*100) : 0) . '%)</td></tr>
+    <tr><td>Tugas Dikerjakan</td><td>:</td><td>' . $inprogress_count . ' (' . ($total_count > 0 ? round(($inprogress_count/$total_count)*100) : 0) . '%)</td></tr>
+    <tr><td>Tugas Belum Mulai</td><td>:</td><td>' . $notstarted_count . ' (' . ($total_count > 0 ? round(($notstarted_count/$total_count)*100) : 0) . '%)</td></tr>
+</table>';
+$pdf->writeHTML($html_stats, true, false, true, false, '');
+$pdf->Ln(8);
 
-$html .= '<h2>Ringkasan Umum</h2>';
-$html .= '<p>Total Tugas Selesai dalam periode: <strong>' . count($tasks_completed) . '</strong></p>';
-$html .= '<p>Tugas Masih Dikerjakan (batas waktu s/d ' . date('d M Y', strtotime($end_date_str)) . '): <strong>' . count($tasks_in_progress) . '</strong></p>';
-$html .= '<p>Tugas Belum Dimulai (batas waktu dalam periode): <strong>' . count($tasks_not_started) . '</strong></p>';
-$html .= '<p>Tugas Terlewat (batas waktu s/d ' . date('d M Y', strtotime($end_date_str)) . '): <strong>' . count($tasks_overdue) . '</strong></p>';
+// Tabel Detail Tugas
+$pdf->SetFont('helvetica', 'B', 11);
+$pdf->Cell(0, 10, 'Detail Tugas:', 0, 1, 'L');
+$pdf->SetFont('helvetica', '', 9);
 
+$html_tasks = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
+    <thead>
+        <tr style="background-color: #7e47b8; color: white; font-weight:bold; text-align:center;">
+            <th width="5%">No.</th>
+            <th width="25%">Judul</th>
+            <th width="15%">Prioritas</th>
+            <th width="15%">Status</th>
+            <th width="15%">Deadline</th>
+            <th width="25%">Tgl. Diperbarui/Selesai</th>
+        </tr>
+    </thead>
+    <tbody>';
 
-// Fungsi untuk render tabel tugas
-function render_task_table_pdf($title, $tasks, $date_column_name, $date_column_header) {
-    $table_html = '<h2>' . htmlspecialchars($title) . '</h2>';
-    if (empty($tasks)) {
-        $table_html .= '<p class="no-data">Tidak ada tugas dalam kategori ini.</p>';
-    } else {
-        $table_html .= '<table><thead><tr><th>No.</th><th>Judul Tugas</th><th>Prioritas</th><th>' . htmlspecialchars($date_column_header) . '</th></tr></thead><tbody>';
-        $no = 1;
-        foreach ($tasks as $task) {
-            $table_html .= '<tr>
-                                <td style="width:10%; text-align:center;">' . $no++ . '</td>
-                                <td style="width:50%;">' . htmlspecialchars($task['title']) . '</td>
-                                <td style="width:20%;">' . htmlspecialchars($task['priority']) . '</td>
-                                <td style="width:20%;">' . htmlspecialchars($task[$date_column_name]) . '</td>
-                            </tr>';
+if (empty($tasks_for_pdf)) {
+    $html_tasks .= '<tr><td colspan="6" style="text-align:center; font-style:italic;">Tidak ada data tugas untuk ditampilkan pada rentang waktu ini.</td></tr>';
+} else {
+    $no = 1;
+    foreach ($tasks_for_pdf as $task) {
+        $status_display = $task['status'];
+        if ($task['status'] == 'Not Started') $status_display = 'Belum Mulai';
+        elseif ($task['status'] == 'In Progress') $status_display = 'Dikerjakan';
+
+        // Tanggal yang relevan: updated_at jika completed, jika tidak created_at (atau due_date)
+        $relevant_date = ($task['status'] == 'Completed') ? $task['updated_at_f'] : $task['created_at_f'];
+
+        $html_tasks .= '<tr>
+            <td style="text-align:center;">' . $no++ . '</td>
+            <td>' . htmlspecialchars($task['title']) . '</td>
+            <td style="text-align:center;">' . htmlspecialchars($task['priority']) . '</td>
+            <td style="text-align:center;">' . htmlspecialchars($status_display) . '</td>
+            <td style="text-align:center;">' . htmlspecialchars($task['due_date_f'] ?? 'N/A') . '</td>
+            <td style="text-align:center;">' . htmlspecialchars($relevant_date) . '</td>
+        </tr>';
+        if (!empty($task['description'])) {
+             $html_tasks .= '<tr><td colspan="6" style="font-size:8pt; font-style:italic; background-color:#f9f9f9;">Deskripsi: ' . nl2br(htmlspecialchars($task['description'])) . '</td></tr>';
         }
-        $table_html .= '</tbody></table>';
     }
-    return $table_html;
 }
+$html_tasks .= '</tbody></table>';
+$pdf->writeHTML($html_tasks, true, false, true, false, '');
+$pdf->Ln(5);
 
-$html .= render_task_table_pdf('Tugas yang Diselesaikan', $tasks_completed, 'completed_date', 'Tanggal Selesai');
-$html .= render_task_table_pdf('Tugas Masih Dikerjakan', $tasks_in_progress, 'due_date_f', 'Batas Waktu');
-$html .= render_task_table_pdf('Tugas Belum Dimulai', $tasks_not_started, 'due_date_f', 'Batas Waktu');
-$html .= render_task_table_pdf('Tugas Terlewat Batas Waktu', $tasks_overdue, 'due_date_f', 'Batas Waktu');
+$pdf->SetFont('helvetica', 'I', 8);
+$pdf->MultiCell(0, 10, "Dokumen ini adalah laporan resmi yang dihasilkan oleh sistem List In. Informasi yang terkandung di dalamnya bersifat rahasia dan hanya ditujukan untuk pengguna yang bersangkutan. Dilarang menyebarluaskan tanpa izin.", 0, 'L', 0, 1, '', '', true);
 
-$pdf->writeHTML($html, true, false, true, false, '');
-$pdf_filename = 'Laporan_ListIn_' . str_replace(' ', '_', $user_data['username']) . '_' . $start_date_str . '_sd_' . $end_date_str . '.pdf';
-$pdf->Output($pdf_filename, 'I'); // 'I' untuk inline (tampil di browser), 'D' untuk download
+// Tutup dan output PDF
+$pdf_filename = 'Laporan_Tugas_ListIn_' . date('Ymd_His') . '.pdf';
+$pdf->Output($pdf_filename, 'I'); // I: tampilkan di browser, D: download
 
-exit;
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->close();
+}
+exit; // Penting untuk menghentikan eksekusi skrip lain
 ?>
 ```
 
-**6.7. `cron_send_reports.php` (Untuk Cron Job Laporan Email Otomatis)**
-```php
-<?php
-// cron_send_reports.php
-// Script ini dijalankan oleh cron job server
-
-// Tingkatkan batas waktu eksekusi jika perlu untuk banyak user/laporan
-set_time_limit(0);
-ignore_user_abort(true);
-
-require_once __DIR__ . '/includes/config.php';
-require_once __DIR__ . '/includes/db.php';
-require_once __DIR__ . '/includes/send_email.php';
-// Kita perlu fungsi generate_report_pdf atau logika serupa di sini
-// Untuk sederhana, kita akan duplikasi sebagian logika PDF generation.
-// Idealnya, ini jadi fungsi terpisah yang bisa dipanggil.
-
-echo "Memulai proses pengiriman laporan otomatis...\n";
-
-$today = date('Y-m-d');
-$now_timestamp = time();
-
-// Ambil pengguna yang mengaktifkan laporan dan waktunya mengirim
-$stmt_users = $conn->prepare(
-    "SELECT id, username, email, report_frequency, last_report_sent_at
-     FROM users
-     WHERE report_frequency != 'none'"
-);
-$stmt_users->execute();
-$result_users = $stmt_users->get_result();
-
-while ($user = $result_users->fetch_assoc()) {
-    echo "Memproses user: " . $user['username'] . " (" . $user['email'] . ") - Frekuensi: " . $user['report_frequency'] . "\n";
-    $user_id_cron = $user['id'];
-    $send_now = false;
-    $report_start_date_cron = '';
-    $report_end_date_cron = $today; // Laporan selalu hingga hari ini
-
-    switch ($user['report_frequency']) {
-        case 'daily':
-            // Kirim jika belum pernah atau last_sent kemarin atau lebih lama
-            if (empty($user['last_report_sent_at']) || date('Y-m-d', strtotime($user['last_report_sent_at'])) < $today) {
-                $send_now = true;
-                $report_start_date_cron = $today; // Laporan harian untuk hari ini
-            }
-            break;
-        case 'weekly':
-            // Kirim jika hari ini Senin dan (belum pernah atau last_sent > 7 hari lalu)
-            if (date('N') == 1) { // 1 = Senin
-                if (empty($user['last_report_sent_at']) || strtotime($user['last_report_sent_at']) < strtotime('-6 days', $now_timestamp)) {
-                    $send_now = true;
-                    $report_start_date_cron = date('Y-m-d', strtotime('-6 days', $now_timestamp)); // 7 hari terakhir
-                }
-            }
-            break;
-        case 'monthly':
-            // Kirim jika hari ini tanggal 1 dan (belum pernah atau last_sent > 27 hari lalu)
-            if (date('j') == 1) { // j = tanggal tanpa leading zero
-                 if (empty($user['last_report_sent_at']) || strtotime($user['last_report_sent_at']) < strtotime('-27 days', $now_timestamp)) {
-                    $send_now = true;
-                    $report_start_date_cron = date('Y-m-d', strtotime('first day of last month', $now_timestamp));
-                    $report_end_date_cron = date('Y-m-d', strtotime('last day of last month', $now_timestamp));
-                }
-            }
-            break;
-    }
-
-    if ($send_now) {
-        echo "  Waktunya mengirim laporan untuk " . $user['username'] . "\n";
-        // --- Logika Generate Konten Laporan (mirip generate_report_pdf.php) ---
-        // Ambil data tugas dalam rentang $report_start_date_cron dan $report_end_date_cron
-        $tasks_completed_cron = []; $tasks_in_progress_cron = []; $tasks_not_started_cron = []; $tasks_overdue_cron = [];
-        
-        // Query data (contoh untuk completed)
-        $stmt_c = $conn->prepare("SELECT title FROM tasks WHERE user_id = ? AND status = 'Completed' AND DATE(updated_at) BETWEEN ? AND ?");
-        $stmt_c->bind_param("iss", $user_id_cron, $report_start_date_cron, $report_end_date_cron);
-        $stmt_c->execute();
-        $res_c = $stmt_c->get_result();
-        while($row = $res_c->fetch_assoc()) $tasks_completed_cron[] = $row['title'];
-        $stmt_c->close();
-        // ... (query serupa untuk kategori tugas lainnya) ...
-        // Buat query lengkap untuk semua kategori yang relevan
-
-        $email_subject_report = "Laporan Produktivitas List In Anda (" . date('d M Y', strtotime($report_start_date_cron)) . " - " . date('d M Y', strtotime($report_end_date_cron)) . ")";
-        $email_body_report = get_email_template_header();
-        $email_body_report .= "<div class='content'>
-                                <h2>Halo " . htmlspecialchars($user['username']) . ",</h2>
-                                <p>Berikut adalah laporan produktivitas Anda dari aplikasi List In untuk periode <strong>" . date('d M Y', strtotime($report_start_date_cron)) . " hingga " . date('d M Y', strtotime($report_end_date_cron)) . "</strong>.</p>
-                                
-                                <h3>Tugas Selesai: " . count($tasks_completed_cron) . "</h3>";
-        if (!empty($tasks_completed_cron)) {
-            $email_body_report .= "<ul class='task-list'>";
-            foreach (array_slice($tasks_completed_cron, 0, 5) as $task_title) $email_body_report .= "<li>" . htmlspecialchars($task_title) . "</li>"; // Tampilkan maks 5
-            if(count($tasks_completed_cron) > 5) $email_body_report .= "<li>Dan lainnya...</li>";
-            $email_body_report .= "</ul>";
-        } else { $email_body_report .= "<p>Tidak ada tugas yang diselesaikan pada periode ini.</p>"; }
-
-        // ... (tambahkan ringkasan untuk kategori tugas lain) ...
-
-        $email_body_report .= "<p>Untuk detail lebih lanjut atau mengelola tugas Anda, silakan kunjungi aplikasi List In:</p>
-                               <a href='" . BASE_URL . "/laporan.php' class='button'>Lihat Laporan Lengkap</a>
-                               <p>Anda dapat mengubah frekuensi laporan ini di halaman profil Anda.</p>
-                               <p>Salam,<br>Tim List In</p>
-                               </div>";
-        $email_body_report .= get_email_template_footer();
-
-        // Opsional: Buat PDF dan lampirkan
-        // $pdf_content_for_email = generate_pdf_content_function($user_id_cron, $report_start_date_cron, $report_end_date_cron, $conn);
-        // $temp_pdf_path = sys_get_temp_dir() . '/report_' . $user_id_cron . '_' . time() . '.pdf';
-        // file_put_contents($temp_pdf_path, $pdf_content_for_email);
-        // $attachments = [['path' => $temp_pdf_path, 'name' => 'Laporan_ListIn.pdf']];
-        // if (send_email($user['email'], $email_subject_report, $email_body_report, '', $attachments)) {
-        //    unlink($temp_pdf_path); // Hapus file temp
-
-        if (send_email($user['email'], $email_subject_report, $email_body_report)) {
-             echo "  Laporan berhasil dikirim ke " . $user['email'] . "\n";
-            // Update last_report_sent_at
-            $stmt_update_sent = $conn->prepare("UPDATE users SET last_report_sent_at = NOW() WHERE id = ?");
-            $stmt_update_sent->bind_param("i", $user_id_cron);
-            $stmt_update_sent->execute();
-            $stmt_update_sent->close();
-        } else {
-            echo "  GAGAL mengirim laporan ke " . $user['email'] . "\n";
-        }
-    } else {
-         echo "  Belum waktunya mengirim laporan untuk " . $user['username'] . "\n";
-    }
-     echo "--------------------------------------------------\n";
-}
-$stmt_users->close();
-
-echo "Proses pengiriman laporan otomatis selesai.\n";
-
-// Fungsi untuk generate PDF content (jika ingin dilampirkan)
-// Ini akan sangat mirip dengan generate_report_pdf.php, tapi return content PDF bukan output langsung
-/*
-function generate_pdf_content_function($user_id, $start_date, $end_date, $db_conn_local) {
-    // ... (logika query data seperti di generate_report_pdf.php) ...
-    // ... (logika pembuatan objek TCPDF dan HTML) ...
-    // return $pdf->Output('dummy_filename.pdf', 'S'); // 'S' untuk return as string
-}
-*/
-?>
-```
-
----
-**Langkah 7: CSS Tambahan (Opsional)**
-
-Anda mungkin perlu menambahkan beberapa style minor untuk tombol Google atau elemen baru di halaman laporan. Kebanyakan bisa mengikuti gaya yang sudah ada.
-
-Misalnya, di `css/auth.css` untuk tombol Google:
+**`css/style.css`** (Tambahkan ini di akhir file yang ada)
 ```css
-/* css/auth.css - tambahkan atau sesuaikan */
+/* styles.css - TAMBAHAN UNTUK HALAMAN LAPORAN & AUTH */
+
+/* Tombol Login Google */
 .btn-google {
-    background-color: #db4437;
+    background-color: #DB4437 !important; /* Warna Google */
     color: white;
-    /* ... style lain seperti btn-submit ... */
 }
 .btn-google:hover {
-    background-color: #c23321;
+    background-color: #c23321 !important;
 }
-.btn-google i {
+.btn-submit .fab.fa-google {
     margin-right: 8px;
+    font-size: 1.1em;
 }
-```
-Di `css/style.css` untuk halaman laporan:
-```css
-/* css/style.css - tambahkan */
-#reportCalendarContainer .flatpickr-calendar {
-    width: 100% !important; /* Agar flatpickr inline mengisi kontainer */
-    box-shadow: none;
+
+
+/* Halaman Laporan */
+.report-calendar-area {
+    display: flex;
+    gap: 20px; /* Jarak antara kalender dan list tugas */
+    align-items: flex-start; /* Kalender dan list tugas align top */
 }
-#tasksListForDate .task-item-card {
-    font-size: 0.85rem;
-    padding: 10px;
-    margin-bottom: 8px;
+
+#reportCalendarContainer {
+    flex: 1 1 400px; /* Kalender bisa membesar, basis 400px */
+    min-width: 300px; /* Lebar minimal kalender */
+    background: #fff;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.07);
 }
+html.dark-theme-active #reportCalendarContainer {
+    background: #2c2c2c;
+    border: 1px solid #444;
+}
+/* Styling Flatpickr di dalam #reportCalendarContainer jika diperlukan (sudah ada styling umum flatpickr) */
 html.dark-theme-active #reportCalendarContainer .flatpickr-calendar {
-    background: #373737; /* Sesuaikan dengan warna widget dark mode */
-    border: 1px solid #555;
+    background: #2c2c2c;
+    border-color: #444;
+    color: #e0e0e0;
 }
+html.dark-theme-active #reportCalendarContainer .flatpickr-month,
+html.dark-theme-active #reportCalendarContainer .flatpickr-weekday,
 html.dark-theme-active #reportCalendarContainer .flatpickr-day {
     color: #e0e0e0;
 }
-html.dark-theme-active #reportCalendarContainer .flatpickr-day:hover {
-    background: #4f4f4f;
+html.dark-theme-active #reportCalendarContainer .flatpickr-day:hover,
+html.dark-theme-active #reportCalendarContainer .flatpickr-day:focus {
+    background: #3a3a3a;
 }
-/* ... dan seterusnya untuk styling dark mode kalender ... */
+html.dark-theme-active #reportCalendarContainer .flatpickr-day.today {
+    border-color: #bb86fc;
+    color: #bb86fc;
+}
+html.dark-theme-active #reportCalendarContainer .flatpickr-day.selected,
+html.dark-theme-active #reportCalendarContainer .flatpickr-day.startRange,
+html.dark-theme-active #reportCalendarContainer .flatpickr-day.endRange {
+    background: #bb86fc;
+    border-color: #bb86fc;
+    color: #121212;
+}
+html.dark-theme-active #reportCalendarContainer .flatpickr-day.flatpickr-disabled,
+html.dark-theme-active #reportCalendarContainer .flatpickr-day.prevMonthDay,
+html.dark-theme-active #reportCalendarContainer .flatpickr-day.nextMonthDay {
+    color: #757575;
+}
+html.dark-theme-active #reportCalendarContainer .arrowUp,
+html.dark-theme-active #reportCalendarContainer .arrowDown {
+    border-bottom-color: #e0e0e0; /* atau border-top-color */
+}
+
+
+#tasksForSelectedDate {
+    flex: 1 1 500px; /* List tugas bisa membesar, basis 500px */
+    max-height: 400px; /* Batasi tinggi dan buat scrollable jika perlu */
+    overflow-y: auto;
+    padding: 10px;
+    background: #f9fafb; /* Sedikit beda dari widget utama */
+    border-radius: 6px;
+    border: 1px solid #e7eaec;
+}
+html.dark-theme-active #tasksForSelectedDate {
+    background: #373737;
+    border-color: #555;
+}
+
+#selectedDateTitle {
+    font-size: 1.1rem;
+    color: #34495e;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+html.dark-theme-active #selectedDateTitle {
+    color: #f5f5f5;
+    border-bottom-color: #444;
+}
+
+
+/* Responsive untuk Halaman Laporan */
+@media (max-width: 992px) { /* Samakan dengan breakpoint dashboard */
+    .report-calendar-area {
+        flex-direction: column; /* Susun vertikal di layar kecil */
+    }
+    #reportCalendarContainer,
+    #tasksForSelectedDateContainer { /* Jika Anda membungkus tasksForSelectedDate */
+        flex-basis: auto; /* Reset flex-basis */
+        width: 100%;
+    }
+    #tasksForSelectedDate {
+        max-height: 300px; /* Kurangi tinggi di mobile */
+    }
+}
+
+/* Penyesuaian untuk .dashboard-grid di laporan.php jika diperlukan */
+.main .dashboard-grid { /* Target spesifik untuk laporan */
+    /* ... bisa tambahkan style jika default dashboard-grid tidak cocok ... */
+}
+
+```
+
+**`css/auth.css`** (Tambahkan untuk tombol google, sesuaikan jika ada yang bertabrakan)
+```css
+/* css/auth.css - TAMBAHAN */
+
+.auth-container .btn-submit.btn-google {
+    background-color: #DB4437; /* Warna Google */
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.auth-container .btn-submit.btn-google:hover {
+    background-color: #c23321;
+}
+
+.auth-container .btn-submit .fab.fa-google {
+    margin-right: 8px;
+    font-size: 1.1em; /* Sesuaikan ukuran ikon */
+}
+
+html.dark-theme-active .auth-container .btn-submit.btn-google {
+    background-color: #e57373; /* Warna Google lebih terang untuk dark mode */
+    color: #121212; /* Teks gelap agar kontras */
+}
+html.dark-theme-active .auth-container .btn-submit.btn-google:hover {
+    background-color: #ef5350;
+}
 ```
 
 ---
-**Tutorial Langkah Eksternal:**
+**Langkah 4: Tutorial Tambahan**
 
-1.  **Google Cloud Console (Untuk Login Google OAuth 2.0):**
-    *   Kunjungi [Google Cloud Console](https://console.cloud.google.com/).
-    *   **Buat Proyek Baru** (atau pilih yang sudah ada).
-    *   Pergi ke **APIs & Services > Credentials**.
-    *   Klik **+ CREATE CREDENTIALS > OAuth client ID**.
-    *   Jika diminta, konfigurasikan **OAuth consent screen** terlebih dahulu:
-        *   **User Type:** External (atau Internal jika GSuite).
-        *   **App name:** List In (atau nama aplikasi Anda).
-        *   **User support email:** Email Anda.
-        *   **Developer contact information:** Email Anda.
-        *   Klik **SAVE AND CONTINUE**.
-        *   Di bagian **Scopes**, klik **ADD OR REMOVE SCOPES**. Cari dan tambahkan:
-            *   `.../auth/userinfo.email` (untuk email)
-            *   `.../auth/userinfo.profile` (untuk nama dan foto profil)
-            *   `openid`
-        *   Klik **UPDATE**, lalu **SAVE AND CONTINUE**.
-        *   Tambahkan **Test users** (email Anda sendiri untuk tahap development). Klik **SAVE AND CONTINUE**.
-    *   Kembali ke **Credentials**, klik **+ CREATE CREDENTIALS > OAuth client ID**.
-    *   **Application type:** Web application.
-    *   **Name:** List In Web Client (atau nama lain).
-    *   **Authorized JavaScript origins:** Biarkan kosong atau isi `http://localhost` (jika perlu).
-    *   **Authorized redirect URIs:** Klik **+ ADD URI**. Masukkan URI callback Anda, misalnya `http://localhost/nama_folder_proyek_anda/google_callback.php`. Ini *harus* sama persis dengan yang Anda definisikan di `GOOGLE_REDIRECT_URI` dalam `config.php`.
-    *   Klik **CREATE**.
-    *   Anda akan mendapatkan **Client ID** dan **Client secret**. Salin nilai-nilai ini ke `GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET` di `includes/config.php`.
-    *   Pastikan **Google People API** dan **OAuth2 API** diaktifkan untuk proyek Anda di **APIs & Services > Library**.
+1.  **Setup Google Cloud Console untuk OAuth 2.0 (Login dengan Google):**
+    *   Buka [Google Cloud Console](https://console.cloud.google.com/).
+    *   Buat Proyek Baru (atau pilih yang sudah ada).
+    *   Navigasi ke "APIs & Services" > "Credentials".
+    *   Klik "Create Credentials" > "OAuth client ID".
+    *   Jika diminta, konfigurasikan "OAuth consent screen" terlebih dahulu:
+        *   Pilih "External" dan klik "Create".
+        *   Isi "App name" (misal: List In Anda), "User support email", dan "Developer contact information". Klik "Save and Continue".
+        *   Di bagian "Scopes", klik "Add or Remove Scopes". Cari dan tambahkan scope `.../auth/userinfo.email` dan `.../auth/userinfo.profile`. Klik "Update", lalu "Save and Continue".
+        *   Di bagian "Test users", tambahkan alamat email Gmail Anda untuk pengujian. Klik "Save and Continue".
+        *   Kembali ke "Credentials".
+    *   Pilih "Web application" untuk Application type.
+    *   Beri nama (misal: ListIn Web Client).
+    *   Di "Authorized JavaScript origins", tambahkan URL dasar aplikasi Anda (misal: `http://localhost`).
+    *   Di "Authorized redirect URIs", tambahkan URL callback Anda: `http://localhost/nama_folder_proyek_anda/google_login_callback.php`. **Pastikan ini sama persis dengan `GOOGLE_REDIRECT_URI` di `config.php`**.
+    *   Klik "Create". Anda akan mendapatkan Client ID dan Client Secret.
+    *   Salin Client ID dan Client Secret ini ke `config/config.php` pada `GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET`.
+    *   Pastikan "Google People API" dan "Identity Toolkit API" (atau cukup "Google Sign-In API") aktif di "APIs & Services" > "Library".
 
-2.  **Pengaturan Email (PHPMailer dengan Gmail):**
-    *   Email dan password yang Anda berikan (`listinproject@gmail.com` dan `listin12312`) akan digunakan di `includes/config.php` untuk `SMTP_USERNAME` dan `SMTP_PASSWORD`.
-    *   **Jika Akun Gmail Menggunakan 2-Step Verification (Sangat Direkomendasikan):**
-        *   Anda *tidak bisa* menggunakan password login biasa. Anda harus membuat **App Password**.
-        *   Login ke akun Google Anda.
-        *   Pergi ke [Keamanan Akun Google](https://myaccount.google.com/security).
-        *   Di bawah "Cara Anda login ke Google", klik **App passwords** (mungkin perlu klik "2-Step Verification" dulu jika App Passwords tidak langsung terlihat).
-        *   Anda mungkin diminta login lagi.
-        *   Di halaman App passwords, pilih **Select app > Mail** dan **Select device > Other (Custom name)**. Beri nama (misal, "ListIn App PHP").
-        *   Klik **GENERATE**.
-        *   Anda akan mendapatkan 16 karakter password. **Salin password ini**. Ini yang akan Anda gunakan untuk `SMTP_PASSWORD` di `config.php`. Simpan di tempat aman karena Anda tidak bisa melihatnya lagi.
-    *   **Jika Akun Gmail TIDAK Menggunakan 2-Step Verification (Kurang Aman):**
-        *   Anda mungkin perlu mengaktifkan "[Less secure app access](https://myaccount.google.com/lesssecureapps)" di pengaturan keamanan akun Google Anda. **Ini tidak direkomendasikan karena kurang aman.** Google sedang menonaktifkan opsi ini. Sebaiknya aktifkan 2FA dan gunakan App Password.
-    *   Pastikan `SMTP_HOST`, `SMTP_PORT`, dan `SMTP_SECURE` di `config.php` sudah benar untuk Gmail (`smtp.gmail.com`, port `587`, secure `tls` atau port `465`, secure `ssl`).
+2.  **Setup Pengiriman Email dengan Gmail (PHPMailer):**
+    *   Email `listinproject@gmail.com` dengan password `listin12312` yang Anda sebutkan.
+    *   **Keamanan Rendah (Less Secure App Access):**
+        *   Buka akun Gmail `listinproject@gmail.com`.
+        *   Pergi ke [myaccount.google.com/lesssecureapps](https://myaccount.google.com/lesssecureapps).
+        *   Aktifkan "Allow less secure apps". **PERINGATAN:** Ini kurang aman.
+    *   **App Password (Lebih Direkomendasikan jika Akun Memiliki 2-Step Verification):**
+        *   Aktifkan 2-Step Verification untuk akun `listinproject@gmail.com`.
+        *   Pergi ke [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+        *   Pilih "Mail" untuk aplikasi dan "Other (Custom name)" untuk perangkat, beri nama (misal: ListIn App).
+        *   Google akan generate 16-digit App Password. Gunakan password ini di `MAIL_PASSWORD` dalam `config.php` **BUKAN** password login Gmail Anda. Simpan App Password ini dengan aman karena hanya ditampilkan sekali.
+    *   Pastikan konfigurasi SMTP di `config.php` (MAIL\_HOST, MAIL\_PORT, MAIL\_ENCRYPTION) sudah benar untuk Gmail.
 
-3.  **Cron Jobs (Untuk Laporan Email Otomatis):**
-    *   Cron job adalah fitur penjadwalan tugas di server berbasis Linux/Unix. Cara konfigurasinya bervariasi tergantung penyedia hosting Anda.
-    *   Anda perlu mengatur cron job untuk menjalankan script `cron_send_reports.php` secara berkala (misalnya, sekali sehari).
-    *   **Jika Anda menggunakan cPanel:**
-        *   Cari ikon "Cron Jobs" di cPanel.
-        *   Di bagian "Add New Cron Job", pilih interval (misal, "Once Per Day" di "Common Settings").
-        *   Di kolom "Command", Anda perlu memasukkan path ke interpreter PHP dan path absolut ke script Anda. Contoh:
-            ```bash
-            /usr/local/bin/php /home/username_cpanel/public_html/nama_folder_proyek_anda/cron_send_reports.php > /dev/null 2>&1
-            ```
-            *   `/usr/local/bin/php`: Path ke PHP CLI (bisa berbeda, cek ke hosting).
-            *   `/home/username_cpanel/public_html/nama_folder_proyek_anda/cron_send_reports.php`: Path absolut ke script Anda. Ganti `username_cpanel` dan `nama_folder_proyek_anda`.
-            *   `> /dev/null 2>&1`: Untuk menekan output email dari cron job (kecuali jika Anda ingin log).
-    *   **Jika Anda menggunakan VPS atau server sendiri (Linux):**
-        *   Buka terminal dan ketik `crontab -e`.
-        *   Tambahkan baris baru untuk menjadwalkan script. Misalnya, untuk chạy setiap hari jam 3 pagi:
-            ```cron
-            0 3 * * * /usr/bin/php /var/www/html/nama_folder_proyek_anda/cron_send_reports.php > /dev/null 2>&1
-            ```
-            *   Path ke PHP CLI dan script mungkin berbeda.
-    *   **Penting:** Script `cron_send_reports.php` harus dapat diakses dan dieksekusi oleh server. Pastikan pathnya benar. Anda bisa mengujinya dulu dari command line server: `php /path/to/your/cron_send_reports.php`.
+3.  **Setup Cron Job untuk `send_deadline_emails.php`:**
+    *   Cron job adalah task scheduler di sistem berbasis Unix/Linux. Jika Anda menggunakan shared hosting, biasanya ada panel kontrol (cPanel, Plesk) untuk mengatur cron job. Jika VPS, Anda atur via command line.
+    *   Tujuannya adalah menjalankan skrip `send_deadline_emails.php` secara periodik (misal, sekali sehari pada tengah malam atau pagi hari).
+    *   **Contoh Perintah Cron (Linux):**
+        ```bash
+        0 1 * * * /usr/bin/php /path/to/your/project/send_deadline_emails.php > /dev/null 2>&1
+        ```
+        *   `0 1 * * *`: Artinya jalankan setiap hari jam 01:00 pagi.
+        *   `/usr/bin/php`: Path ke PHP CLI interpreter Anda (bisa berbeda).
+        *   `/path/to/your/project/send_deadline_emails.php`: Path absolut ke skrip Anda.
+        *   `> /dev/null 2>&1`: Mengarahkan output (standar dan error) ke null agar tidak membuat file log yang besar (opsional, bisa diarahkan ke file log jika ingin).
+    *   **Di cPanel:** Cari "Cron Jobs". Pilih interval (misal, "Once Per Day"). Masukkan perintah: `php -q /home/your_cpanel_user/public_html/nama_folder_proyek_anda/send_deadline_emails.php`. Path bisa berbeda, cek dokumentasi hosting Anda.
+    *   **Windows Task Scheduler:** Jika server Anda Windows, gunakan Task Scheduler untuk menjalankan `php.exe C:\path\to\your\project\send_deadline_emails.php`.
 
 ---
+Ini adalah kerangka besar. Setiap bagian memerlukan pengujian yang cermat. Pastikan path, URL, dan kredensial di `config.php` sudah benar. Mulai dengan satu fitur, uji, lalu lanjut ke fitur berikutnya.
 
-Ini adalah kerangka besar. Setiap bagian memerlukan perhatian detail, pengujian, dan kemungkinan debugging.
-**Fokus utama Anda selanjutnya:**
-1.  Siapkan environment (Composer, folder writable).
-2.  Konfigurasi Google API dan email di `config.php`.
-3.  Implementasikan fitur login Google & Lupa Password dulu, karena ini mengubah alur autentikasi.
-4.  Kemudian, integrasikan pengiriman email untuk notifikasi.
-5.  Terakhir, kerjakan halaman Laporan dan sistem cron jobnya.
+**Catatan Penting Terakhir:**
+*   Kode di atas belum termasuk penanganan error yang sangat mendalam atau validasi sisi klien yang canggih untuk setiap field. Ini adalah dasar fungsional.
+*   Keamanan adalah aspek penting. Selalu sanitasi input dan output (htmlspecialchars), gunakan prepared statements.
+*   Untuk `ajax_clear_all_notifications.php`, pastikan nama filenya benar. Di daftar file Anda ada `ajax_clear_all_notifictions.php` (typo).
 
-Semoga berhasil! Ini proyek yang ambisius.
+Semoga berhasil dengan implementasinya!
