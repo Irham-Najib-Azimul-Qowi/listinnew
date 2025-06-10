@@ -97,7 +97,7 @@ Ini adalah daftar "bahan-bahan" yang kita gunakan untuk membangun List In.
 | | **TCPDF** | Library PHP untuk membuat file PDF secara dinamis untuk fitur "Unduh Laporan". |
 | | **PHPMailer** | Library PHP untuk mengirim email, digunakan pada fitur "Lupa Password". |
 | **API Eksternal** | **Google Gemini API** | Digunakan untuk "otak" dari fitur Bot Manager. Gemini menerima teks percakapan dan memahaminya, lalu memberikan saran dalam format JSON. |
-| **Lingkungan** | **XAMPP/LAMP** | Paket perangkat lunak yang memudahkan menjalankan server Apache, PHP, dan MySQL di komputer lokal untuk pengembangan. |
+| **Lingkungan** | **LARAGON** | Paket perangkat lunak yang memudahkan menjalankan server Apache, PHP, dan MySQL di komputer lokal untuk pengembangan. |
 
 ### 2.3. Struktur Direktori Proyek
 
