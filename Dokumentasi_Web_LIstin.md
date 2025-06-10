@@ -8,7 +8,7 @@ Tentu, dengan senang hati. Ini adalah dokumentasi lengkap untuk proyek aplikasi 
 
 **Versi:** 1.0
 **Tanggal:** 24 Mei 2024
-**Disusun oleh:** Asisten AI
+**Disusun oleh:** Listin Team
 
 ---
 
